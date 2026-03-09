@@ -299,20 +299,26 @@ async def on_ready():
 # STATS LOOP
 # ==========================================================
 
+async def generate_stats_text():
+    # 仮の例：ここにデータベースから取引数やレビューなどを集計して文字列にする
+    total_trades = 123
+    successful_trades = 100
+    failed_trades = 23
+    stats_text = (
+        f"📊 取引統計\n"
+        f"総取引数: {total_trades}\n"
+        f"成功: {successful_trades}\n"
+        f"失敗: {failed_trades}"
+    )
+    return stats_text
 @tasks.loop(minutes=2)
 async def update_stats():
-    # ここに必ず処理を書く
     channel = bot.get_channel(STATS_CHANNEL_ID)
     if channel is None:
         return
-    new_content = "統計更新テキスト"  # ここは generate_stats_text() でもOK
+    new_content = await generate_stats_text()  # await をつける
     await channel.send(new_content)
 
-# BOT起動時にタスクを開始
-@bot.event
-async def on_ready():
-    update_stats.start()
-    print("Bot is ready and stats task started")
 
 
 
