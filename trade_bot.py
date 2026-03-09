@@ -610,6 +610,11 @@ async def finish(interaction: discord.Interaction):
         "取引結果を選択してください",
         view=FinishView()
     )
+@bot.tree.command(name="review", description="仲介レビューをする")
+@app_commands.describe(stars="星評価（1～5）", comment="コメント")
+async def review(interaction: discord.Interaction, stars: int, comment: str):
+    # ここにレビュー保存処理
+
 # ==========================================================
 # PART 3
 # PROFILE / REVIEW STATS / REVIEW VIEW
