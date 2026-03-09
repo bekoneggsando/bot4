@@ -299,19 +299,21 @@ async def on_ready():
 # STATS LOOP
 # ==========================================================
 
-# 間違い
-@tasks.loop(minutes=2)
-def update_stats():
-    # 処理
-
-# 正しい
 @tasks.loop(minutes=2)
 async def update_stats():
+    # ここに必ず処理を書く
     channel = bot.get_channel(STATS_CHANNEL_ID)
     if channel is None:
         return
-    new_content = generate_stats_text()
+    new_content = "統計更新テキスト"  # ここは generate_stats_text() でもOK
     await channel.send(new_content)
+
+# BOT起動時にタスクを開始
+@bot.event
+async def on_ready():
+    update_stats.start()
+    print("Bot is ready and stats task started")
+
 
 
 async def update_stats():
