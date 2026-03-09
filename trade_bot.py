@@ -19,7 +19,6 @@ from threading import Thread
 
 TOKEN = os.getenv("TOKEN")
 
-
 STAFF_ROLE_ID = 1478964390530121964
 STATS_CHANNEL_ID = 1479271849283293256
 LOG_CHANNEL_ID = 1480455928699555992
@@ -38,6 +37,7 @@ bot = commands.Bot(
 )
 
 db = None
+stats_message = None
 
 # ==========================================================
 # KEEP ALIVE
@@ -174,57 +174,7 @@ async def get_month_trades():
     return row[0]
 
 # ==========================================================
-# REVIEW STATS
-# ==========================================================
-
-async def get_staff_reviews(staff_id):
-
-    async with db.execute(
-        "SELECT rating FROM staff_reviews WHERE staff=?",
-        (staff_id,)
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    return [r[0] for r in rows]
-
-async def get_server_reviews():
-
-    async with db.execute(
-        "SELECT rating FROM server_reviews"
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    return [r[0] for r in rows]
-
-# ==========================================================
-# RANKING SCORE
-# ==========================================================
-
-async def calculate_staff_score(staff_id):
-
-    ratings = await get_staff_reviews(staff_id)
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades WHERE staff=?",
-        (staff_id,)
-    ) as cur:
-
-        trades = (await cur.fetchone())[0]
-
-    if len(ratings) == 0:
-
-        return 0
-
-    avg = sum(ratings) / len(ratings)
-
-    score = (avg * math.log(len(ratings)+1)) + (trades * 0.2)
-
-    return score
-
-# ==========================================================
-# EMBEDS
+# EMBED
 # ==========================================================
 
 def create_stats_embed(total, success, fail, today, month):
@@ -232,7 +182,6 @@ def create_stats_embed(total, success, fail, today, month):
     rate = 0
 
     if total > 0:
-
         rate = round(success/total*100,2)
 
     embed = discord.Embed(
@@ -279,57 +228,10 @@ def create_stats_embed(total, success, fail, today, month):
     return embed
 
 # ==========================================================
-# BOT READY
-# ==========================================================
-
-@bot.event
-async def on_ready():
-
-    print("BOT STARTING")
-
-    await init_database()
-
-    await bot.tree.sync()
-
-    update_stats.start()
-
-    print("BOT READY")
-
-# ==========================================================
-# STATS LOOP
+# STATS TEXT
 # ==========================================================
 
 async def generate_stats_text():
-    # 仮の例：ここにデータベースから取引数やレビューなどを集計して文字列にする
-    total_trades = 123
-    successful_trades = 100
-    failed_trades = 23
-    stats_text = (
-        f"📊 取引統計\n"
-        f"総取引数: {total_trades}\n"
-        f"成功: {successful_trades}\n"
-        f"失敗: {failed_trades}"
-    )
-    return stats_text
-@tasks.loop(minutes=2)
-async def update_stats():
-    channel = bot.get_channel(STATS_CHANNEL_ID)
-    if channel is None:
-        return
-    new_content = await generate_stats_text()  # ← await が必要
-    await channel.send(new_content)
-
-
-
-
-
-async def update_stats():
-
-    channel = bot.get_channel(STATS_CHANNEL_ID)
-
-    if not channel:
-
-        return
 
     total = await get_total_trades()
     success = await get_success_trades()
@@ -337,54 +239,58 @@ async def update_stats():
     today = await get_today_trades()
     month = await get_month_trades()
 
-    embed = create_stats_embed(
-        total,
-        success,
-        fail,
-        today,
-        month
+    return (
+        f"📊取引統計\n"
+        f"総取引: {total}\n"
+        f"成功: {success}\n"
+        f"失敗: {fail}\n"
+        f"今日: {today}\n"
+        f"今月: {month}"
     )
 
-    try:
+# ==========================================================
+# STATS LOOP
+# ==========================================================
 
-        await channel.purge(limit=1)
+@tasks.loop(minutes=5)
+async def update_stats():
 
-    except:
+    global stats_message
 
-        pass
+    if stats_message:
 
-    await channel.send(embed=embed)
+        new_content = await generate_stats_text()
 
-# 例: BOT起動時に一度だけ送る
-stats_message = None
+        await stats_message.edit(content=new_content)
+
+# ==========================================================
+# BOT READY
+# ==========================================================
 
 @bot.event
 async def on_ready():
-    global stats_message
-    channel = bot.get_channel(STATS_CHANNEL_ID)
-    
-    # 最初にメッセージを送る（通知は1回だけ）
-    stats_message = await channel.send("統計を読み込み中...")
 
-    # その後は定期更新タスクで編集する
+    global stats_message
+
+    print("BOT STARTING")
+
+    await init_database()
+    await bot.tree.sync()
+
+    channel = bot.get_channel(STATS_CHANNEL_ID)
+
+    if channel:
+        stats_message = await channel.send("統計を読み込み中...")
+
     update_stats.start()
 
-
-# 定期更新タスク
-@tasks.loop(minutes=5)
-async def update_stats():
-    global stats_message
-    if stats_message:
-        new_content = generate_stats_text()  # あなたの統計文字列生成関数
-        await stats_message.edit(content=new_content)
-
+    print("BOT READY")
 
 # ==========================================================
 # START
 # ==========================================================
 
 keep_alive()
-
 
 # ==========================================================
 # PART 2
