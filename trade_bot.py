@@ -104,13 +104,6 @@ async def init_database():
     )
     """)
 
-    await db.execute("""
-    CREATE TABLE IF NOT EXISTS stats_cache(
-        name TEXT,
-        value INTEGER
-    )
-    """)
-
     await db.commit()
 
 # ==========================================================
@@ -174,64 +167,10 @@ async def get_month_trades():
     return row[0]
 
 # ==========================================================
-# EMBED
+# STATS EMBED
 # ==========================================================
 
-def create_stats_embed(total, success, fail, today, month):
-
-    rate = 0
-
-    if total > 0:
-        rate = round(success/total*100,2)
-
-    embed = discord.Embed(
-        title="📊取引統計",
-        color=discord.Color.blue()
-    )
-
-    embed.add_field(
-        name="総取引",
-        value=str(total),
-        inline=True
-    )
-
-    embed.add_field(
-        name="成功",
-        value=str(success),
-        inline=True
-    )
-
-    embed.add_field(
-        name="失敗",
-        value=str(fail),
-        inline=True
-    )
-
-    embed.add_field(
-        name="成功率",
-        value=f"{rate}%",
-        inline=False
-    )
-
-    embed.add_field(
-        name="今日の取引",
-        value=str(today),
-        inline=True
-    )
-
-    embed.add_field(
-        name="今月の取引",
-        value=str(month),
-        inline=True
-    )
-
-    return embed
-
-# ==========================================================
-# STATS TEXT
-# ==========================================================
-
-async def generate_stats_text():
+async def generate_stats_embed():
 
     total = await get_total_trades()
     success = await get_success_trades()
@@ -239,14 +178,98 @@ async def generate_stats_text():
     today = await get_today_trades()
     month = await get_month_trades()
 
-    return (
-        f"📊取引統計\n"
-        f"総取引: {total}\n"
-        f"成功: {success}\n"
-        f"失敗: {fail}\n"
-        f"今日: {today}\n"
-        f"今月: {month}"
+    rate = 0
+    if total > 0:
+        rate = round(success / total * 100, 2)
+
+    embed = discord.Embed(
+        title="📊 仲介サーバー取引統計",
+        color=discord.Color.blue()
     )
+
+    embed.description = "━━━━━━━━━━━━━━━━━━"
+
+    embed.add_field(
+        name="📦 総取引数",
+        value=f"**{total}件**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="✅ 成功",
+        value=f"**{success}件**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="❌ 失敗",
+        value=f"**{fail}件**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📈 成功率",
+        value=f"**{rate}%**",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📅 今日の取引",
+        value=f"{today}件",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🗓 今月の取引",
+        value=f"{month}件",
+        inline=True
+    )
+
+    # ======================
+    # 信頼度ランキング
+    # ======================
+
+    trust_ranking = await build_staff_trust_ranking(bot.guilds[0])
+
+    trust_text = ""
+
+    for i, (name, score) in enumerate(trust_ranking[:5], start=1):
+
+        trust_text += f"{i}位 {name} ⭐{round(score,2)}\n"
+
+    if trust_text == "":
+        trust_text = "データなし"
+
+    embed.add_field(
+        name="🏆 信頼度ランキング",
+        value=trust_text,
+        inline=False
+    )
+
+    # ======================
+    # 取引数ランキング
+    # ======================
+
+    trade_ranking = await build_trade_ranking(bot.guilds[0])
+
+    trade_text = ""
+
+    for i, (name, count) in enumerate(trade_ranking[:5], start=1):
+
+        trade_text += f"{i}位 {name} : {count}件\n"
+
+    if trade_text == "":
+        trade_text = "データなし"
+
+    embed.add_field(
+        name="📊 取引数ランキング",
+        value=trade_text,
+        inline=False
+    )
+
+    embed.set_footer(text="TradeBot Statistics")
+
+    return embed
 
 # ==========================================================
 # STATS LOOP
@@ -259,9 +282,12 @@ async def update_stats():
 
     if stats_message:
 
-        new_content = await generate_stats_text()
+        embed = await generate_stats_embed()
 
-        await stats_message.edit(content=new_content)
+        await stats_message.edit(
+            content=None,
+            embed=embed
+        )
 
 # ==========================================================
 # BOT READY
@@ -280,7 +306,10 @@ async def on_ready():
     channel = bot.get_channel(STATS_CHANNEL_ID)
 
     if channel:
-        stats_message = await channel.send("統計を読み込み中...")
+
+        embed = await generate_stats_embed()
+
+        stats_message = await channel.send(embed=embed)
 
     update_stats.start()
 
@@ -291,7 +320,6 @@ async def on_ready():
 # ==========================================================
 
 keep_alive()
-
 # ==========================================================
 # PART 2
 # FINISH SYSTEM / REVIEW UI
