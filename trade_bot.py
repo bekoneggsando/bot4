@@ -300,6 +300,19 @@ async def on_ready():
 # ==========================================================
 
 @tasks.loop(minutes=2)
+# 統計文字列生成関数
+def generate_stats_text():
+    total_trades = 42
+    successful_trades = 30
+    failed_trades = 12
+
+    return (
+        f"📊 **取引統計**\n"
+        f"総取引数: {total_trades}\n"
+        f"成功: {successful_trades}\n"
+        f"失敗: {failed_trades}\n"
+    )
+
 async def update_stats():
 
     channel = bot.get_channel(STATS_CHANNEL_ID)
