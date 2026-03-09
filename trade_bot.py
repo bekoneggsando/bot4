@@ -332,6 +332,30 @@ async def update_stats():
 
     await channel.send(embed=embed)
 
+# 例: BOT起動時に一度だけ送る
+stats_message = None
+
+@bot.event
+async def on_ready():
+    global stats_message
+    channel = bot.get_channel(STATS_CHANNEL_ID)
+    
+    # 最初にメッセージを送る（通知は1回だけ）
+    stats_message = await channel.send("統計を読み込み中...")
+
+    # その後は定期更新タスクで編集する
+    update_stats.start()
+
+
+# 定期更新タスク
+@tasks.loop(minutes=5)
+async def update_stats():
+    global stats_message
+    if stats_message:
+        new_content = generate_stats_text()  # あなたの統計文字列生成関数
+        await stats_message.edit(content=new_content)
+
+
 # ==========================================================
 # START
 # ==========================================================
