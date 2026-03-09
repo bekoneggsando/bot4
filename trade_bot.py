@@ -299,19 +299,20 @@ async def on_ready():
 # STATS LOOP
 # ==========================================================
 
+# 間違い
 @tasks.loop(minutes=2)
-# 統計文字列生成関数
-def generate_stats_text():
-    total_trades = 42
-    successful_trades = 30
-    failed_trades = 12
+def update_stats():
+    # 処理
 
-    return (
-        f"📊 **取引統計**\n"
-        f"総取引数: {total_trades}\n"
-        f"成功: {successful_trades}\n"
-        f"失敗: {failed_trades}\n"
-    )
+# 正しい
+@tasks.loop(minutes=2)
+async def update_stats():
+    channel = bot.get_channel(STATS_CHANNEL_ID)
+    if channel is None:
+        return
+    new_content = generate_stats_text()
+    await channel.send(new_content)
+
 
 async def update_stats():
 
