@@ -610,10 +610,16 @@ async def finish(interaction: discord.Interaction):
         "取引結果を選択してください",
         view=FinishView()
     )
-@bot.tree.command(name="review", description="仲介レビューをする")
-@app_commands.describe(stars="星評価（1～5）", comment="コメント")
-async def review(interaction: discord.Interaction, stars: int, comment: str):
-    # ここにレビュー保存処理
+async def get_staff_review_stats(staff_id):
+    # データベースからスタッフレビュー統計を取得
+    async with aiosqlite.connect("trade.db") as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*), AVG(rating) FROM staff_reviews WHERE staff_id = ?",
+            (staff_id,)
+        )
+        count, avg_rating = await cursor.fetchone()
+    return {"count": count, "avg_rating": avg_rating}
+
 
 # ==========================================================
 # PART 3
