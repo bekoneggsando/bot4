@@ -40,24 +40,7 @@ db = None
 stats_message = None
 
 # ==========================================================
-# KEEP ALIVE
-# ==========================================================
-
-app = Flask("")
-
-@app.route("/")
-def home():
-    return "Bot Online"
-
-def run_web():
-    app.run(host="0.0.0.0", port=8080)
-
-def keep_alive():
-    t = Thread(target=run_web)
-    t.start()
-
-# ==========================================================
-# DATABASE INIT
+# DATABASE
 # ==========================================================
 
 async def init_database():
@@ -69,36 +52,9 @@ async def init_database():
     await db.execute("""
     CREATE TABLE IF NOT EXISTS trades(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        staff INTEGER,
-        success INTEGER,
-        user INTEGER,
-        date TEXT
-    )
-    """)
-
-    await db.execute("""
-    CREATE TABLE IF NOT EXISTS staff_reviews(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        staff INTEGER,
+        staff_id INTEGER,
+        user_id INTEGER,
         rating INTEGER,
-        comment TEXT,
-        date TEXT
-    )
-    """)
-
-    await db.execute("""
-    CREATE TABLE IF NOT EXISTS server_reviews(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rating INTEGER,
-        comment TEXT,
-        date TEXT
-    )
-    """)
-
-    await db.execute("""
-    CREATE TABLE IF NOT EXISTS failures(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        reason TEXT,
         comment TEXT,
         date TEXT
     )
@@ -107,135 +63,40 @@ async def init_database():
     await db.commit()
 
 # ==========================================================
-# UTILS
-# ==========================================================
-
-async def get_total_trades():
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades"
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-async def get_success_trades():
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades WHERE success=1"
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-async def get_fail_trades():
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades WHERE success=0"
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-async def get_today_trades():
-
-    today = datetime.date.today().isoformat()
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades WHERE date=?",
-        (today,)
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-async def get_month_trades():
-
-    month = datetime.date.today().strftime("%Y-%m")
-
-    async with db.execute(
-        "SELECT COUNT(*) FROM trades WHERE date LIKE ?",
-        (f"{month}%",)
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-# ==========================================================
-# STATS EMBED
+# GENERATE STATS EMBED
 # ==========================================================
 
 async def generate_stats_embed():
 
-    total = await get_total_trades()
-    success = await get_success_trades()
-    fail = await get_fail_trades()
-    today = await get_today_trades()
-    month = await get_month_trades()
-
-    rate = 0
-    if total > 0:
-        rate = round(success / total * 100, 2)
-
     embed = discord.Embed(
-        title="📊 仲介サーバー取引統計",
-        color=discord.Color.blue()
+        title="📊 仲介取引統計",
+        color=0x00ffcc
     )
 
-    embed.description = "━━━━━━━━━━━━━━━━━━"
-
-    embed.add_field(
-        name="📦 総取引数",
-        value=f"**{total}件**",
-        inline=True
-    )
-
-    embed.add_field(
-        name="✅ 成功",
-        value=f"**{success}件**",
-        inline=True
-    )
-
-    embed.add_field(
-        name="❌ 失敗",
-        value=f"**{fail}件**",
-        inline=True
-    )
-
-    embed.add_field(
-        name="📈 成功率",
-        value=f"**{rate}%**",
-        inline=False
-    )
-
-    embed.add_field(
-        name="📅 今日の取引",
-        value=f"{today}件",
-        inline=True
-    )
-
-    embed.add_field(
-        name="🗓 今月の取引",
-        value=f"{month}件",
-        inline=True
-    )
-
-    # ======================
+    # ======================================
     # 信頼度ランキング
-    # ======================
+    # ======================================
 
-    trust_ranking = await build_staff_trust_ranking(bot.guilds[0])
+    cursor = await db.execute("""
+    SELECT staff_id, AVG(rating), COUNT(*)
+    FROM trades
+    GROUP BY staff_id
+    ORDER BY AVG(rating) DESC
+    LIMIT 10
+    """)
+
+    rows = await cursor.fetchall()
 
     trust_text = ""
 
-    for i, (name, score) in enumerate(trust_ranking[:5], start=1):
+    for i, row in enumerate(rows, start=1):
 
-        trust_text += f"{i}位 {name} ⭐{round(score,2)}\n"
+        staff = bot.get_user(row[0])
+        rating = round(row[1], 2)
+        count = row[2]
+
+        if staff:
+            trust_text += f"{i}. {staff.name} ⭐{rating} ({count}件)\n"
 
     if trust_text == "":
         trust_text = "データなし"
@@ -246,17 +107,29 @@ async def generate_stats_embed():
         inline=False
     )
 
-    # ======================
+    # ======================================
     # 取引数ランキング
-    # ======================
+    # ======================================
 
-    trade_ranking = await build_trade_ranking(bot.guilds[0])
+    cursor = await db.execute("""
+    SELECT staff_id, COUNT(*)
+    FROM trades
+    GROUP BY staff_id
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+    """)
+
+    rows = await cursor.fetchall()
 
     trade_text = ""
 
-    for i, (name, count) in enumerate(trade_ranking[:5], start=1):
+    for i, row in enumerate(rows, start=1):
 
-        trade_text += f"{i}位 {name} : {count}件\n"
+        staff = bot.get_user(row[0])
+        count = row[1]
+
+        if staff:
+            trade_text += f"{i}. {staff.name} {count}件\n"
 
     if trade_text == "":
         trade_text = "データなし"
