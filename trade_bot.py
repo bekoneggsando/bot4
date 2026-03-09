@@ -405,15 +405,15 @@ async def get_staff_review_stats(staff_id):
 
     async with db.execute(
         """
-        SELECT rating FROM staff_reviews
-        WHERE staff=?
+        SELECT rating FROM trades
+        WHERE staff_id=?
         """,
         (staff_id,)
     ) as cur:
 
         rows = await cur.fetchall()
 
-    ratings = [r[0] for r in rows]
+    ratings = [r[0] for r in rows if r[0] is not None]
 
     if len(ratings) == 0:
 
@@ -439,45 +439,6 @@ async def get_staff_review_stats(staff_id):
         "stars": star_count
     }
 
-# ==========================================================
-# SERVER REVIEW STATS
-# ==========================================================
-
-async def get_server_review_stats():
-
-    async with db.execute(
-        """
-        SELECT rating FROM server_reviews
-        """
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    ratings = [r[0] for r in rows]
-
-    if len(ratings) == 0:
-
-        return {
-            "count": 0,
-            "avg": 0,
-            "stars": {1:0,2:0,3:0,4:0,5:0}
-        }
-
-    avg = round(sum(ratings)/len(ratings),2)
-
-    star_count = {
-        1: ratings.count(1),
-        2: ratings.count(2),
-        3: ratings.count(3),
-        4: ratings.count(4),
-        5: ratings.count(5)
-    }
-
-    return {
-        "count": len(ratings),
-        "avg": avg,
-        "stars": star_count
-    }
 
 # ==========================================================
 # STAFF PROFILE COMMAND
@@ -497,7 +458,7 @@ async def staffprofile(
     async with db.execute(
         """
         SELECT COUNT(*) FROM trades
-        WHERE staff=?
+        WHERE staff_id=?
         """,
         (member.id,)
     ) as cur:
@@ -538,46 +499,6 @@ async def staffprofile(
 
     await interaction.response.send_message(embed=embed)
 
-# ==========================================================
-# SERVER PROFILE COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="serverprofile",
-    description="サーバー評価を見る"
-)
-async def serverprofile(interaction: discord.Interaction):
-
-    stats = await get_server_review_stats()
-
-    embed = discord.Embed(
-        title="サーバー評価",
-        color=discord.Color.gold()
-    )
-
-    embed.add_field(
-        name="レビュー数",
-        value=str(stats["count"])
-    )
-
-    embed.add_field(
-        name="平均評価",
-        value=f"⭐{stats['avg']}"
-    )
-
-    star_text = ""
-
-    for i in range(5,0,-1):
-
-        star_text += f"{i}⭐ : {stats['stars'][i]}\n"
-
-    embed.add_field(
-        name="星内訳",
-        value=star_text,
-        inline=False
-    )
-
-    await interaction.response.send_message(embed=embed)
 
 # ==========================================================
 # STAFF REVIEWS LIST
@@ -594,8 +515,8 @@ async def reviews_staff(
 
     async with db.execute(
         """
-        SELECT rating,date FROM staff_reviews
-        WHERE staff=?
+        SELECT rating,date FROM trades
+        WHERE staff_id=?
         ORDER BY id DESC
         LIMIT 10
         """,
@@ -622,48 +543,6 @@ async def reviews_staff(
         title=f"{member.name} のレビュー",
         description=text,
         color=discord.Color.blue()
-    )
-
-    await interaction.response.send_message(embed=embed)
-
-# ==========================================================
-# SERVER REVIEWS LIST
-# ==========================================================
-
-@bot.tree.command(
-    name="reviews_server",
-    description="サーバーレビューを見る"
-)
-async def reviews_server(interaction: discord.Interaction):
-
-    async with db.execute(
-        """
-        SELECT rating,date FROM server_reviews
-        ORDER BY id DESC
-        LIMIT 10
-        """
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    if not rows:
-
-        await interaction.response.send_message(
-            "レビューがありません"
-        )
-
-        return
-
-    text = ""
-
-    for r in rows:
-
-        text += f"⭐{r[0]} | {r[1]}\n"
-
-    embed = discord.Embed(
-        title="サーバーレビュー",
-        description=text,
-        color=discord.Color.green()
     )
 
     await interaction.response.send_message(embed=embed)
