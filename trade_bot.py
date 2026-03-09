@@ -619,6 +619,28 @@ async def get_staff_review_stats(staff_id):
         )
         count, avg_rating = await cursor.fetchone()
     return {"count": count, "avg_rating": avg_rating}
+@bot.tree.command(name="finish", description="仲介取引を完了します")
+@app_commands.describe(
+    success="成功ならはい、失敗ならいいえ",
+    comment="取引に関するコメントを入力してください（任意）"
+)
+async def finish(interaction: discord.Interaction, success: bool, comment: str = None):
+    # 1. チケットルームを閉じる処理
+    # 2. 成功/失敗の統計反映
+    # 3. レビュー作成
+    await interaction.response.send_message(
+        f"取引完了！ 成功: {success}\nコメント: {comment or 'なし'}",
+        ephemeral=True
+    )
+
+    # コメントがあればデータベースに保存
+    if comment:
+        async with aiosqlite.connect("trade.db") as db:
+            await db.execute(
+                "INSERT INTO trade_comments (user_id, comment, timestamp) VALUES (?, ?, ?)",
+                (interaction.user.id, comment, datetime.datetime.utcnow())
+            )
+            await db.commit()
 
 
 # ==========================================================
