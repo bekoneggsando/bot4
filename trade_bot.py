@@ -559,13 +559,55 @@ async def get_all_staff_ids():
 
     async with db.execute(
         """
-        SELECT DISTINCT staff FROM trades
+        SELECT DISTINCT staff_id FROM trades
         """
     ) as cur:
 
         rows = await cur.fetchall()
 
     return [r[0] for r in rows]
+
+
+# ==========================================================
+# STAFF TRADE COUNT
+# ==========================================================
+
+async def get_staff_trade_count(staff_id):
+
+    async with db.execute(
+        """
+        SELECT COUNT(*) FROM trades
+        WHERE staff_id=?
+        """,
+        (staff_id,)
+    ) as cur:
+
+        row = await cur.fetchone()
+
+    return row[0]
+
+
+# ==========================================================
+# STAFF AVG RATING
+# ==========================================================
+
+async def get_staff_avg_rating(staff_id):
+
+    async with db.execute(
+        """
+        SELECT AVG(rating) FROM trades
+        WHERE staff_id=? AND rating IS NOT NULL
+        """,
+        (staff_id,)
+    ) as cur:
+
+        row = await cur.fetchone()
+
+    if row[0] is None:
+        return 0
+
+    return round(row[0], 2)
+
 
 # ==========================================================
 # STAFF TRUST RANKING
@@ -577,69 +619,20 @@ async def build_staff_trust_ranking(guild):
 
     ranking = []
 
-    for staff in staff_ids:
+    for staff_id in staff_ids:
 
-        score = await calculate_staff_score(staff)
+        rating = await get_staff_avg_rating(staff_id)
 
-        member = guild.get_member(staff)
+        member = guild.get_member(staff_id)
 
         if member:
 
-            ranking.append((member.name, score))
+            ranking.append((member.name, rating))
 
     ranking.sort(key=lambda x: x[1], reverse=True)
 
     return ranking
 
-# ==========================================================
-# STAFF TRADE COUNT
-# ==========================================================
-
-async def get_staff_trade_count(staff):
-
-    async with db.execute(
-        """
-        SELECT COUNT(*) FROM trades
-        WHERE staff=?
-        """,
-        (staff,)
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-# ==========================================================
-# STAFF SUCCESS RATE
-# ==========================================================
-
-async def get_staff_success_rate(staff):
-
-    async with db.execute(
-        """
-        SELECT COUNT(*) FROM trades
-        WHERE staff=? AND success=1
-        """,
-        (staff,)
-    ) as cur:
-
-        success = (await cur.fetchone())[0]
-
-    async with db.execute(
-        """
-        SELECT COUNT(*) FROM trades
-        WHERE staff=?
-        """,
-        (staff,)
-    ) as cur:
-
-        total = (await cur.fetchone())[0]
-
-    if total == 0:
-
-        return 0
-
-    return round(success/total*100,2)
 
 # ==========================================================
 # STAFF TRADE RANKING
@@ -651,11 +644,11 @@ async def build_trade_ranking(guild):
 
     ranking = []
 
-    for staff in staff_ids:
+    for staff_id in staff_ids:
 
-        count = await get_staff_trade_count(staff)
+        count = await get_staff_trade_count(staff_id)
 
-        member = guild.get_member(staff)
+        member = guild.get_member(staff_id)
 
         if member:
 
@@ -665,29 +658,6 @@ async def build_trade_ranking(guild):
 
     return ranking
 
-# ==========================================================
-# STAFF SUCCESS RATE RANKING
-# ==========================================================
-
-async def build_success_ranking(guild):
-
-    staff_ids = await get_all_staff_ids()
-
-    ranking = []
-
-    for staff in staff_ids:
-
-        rate = await get_staff_success_rate(staff)
-
-        member = guild.get_member(staff)
-
-        if member:
-
-            ranking.append((member.name, rate))
-
-    ranking.sort(key=lambda x: x[1], reverse=True)
-
-    return ranking
 
 # ==========================================================
 # STAFF TRUST COMMAND
@@ -715,17 +685,18 @@ async def staffranking(interaction: discord.Interaction):
 
     for name, score in ranking[:10]:
 
-        text += f"{pos}位 {name} ⭐{round(score,2)}\n"
+        text += f"{pos}位 {name} ⭐{score}\n"
 
         pos += 1
 
     embed = discord.Embed(
-        title="スタッフ信頼度ランキング",
+        title="🏆 スタッフ信頼度ランキング",
         description=text,
         color=discord.Color.purple()
     )
 
     await interaction.response.send_message(embed=embed)
+
 
 # ==========================================================
 # TRADE COUNT COMMAND
@@ -758,47 +729,9 @@ async def traderanking(interaction: discord.Interaction):
         pos += 1
 
     embed = discord.Embed(
-        title="取引数ランキング",
+        title="📊 取引数ランキング",
         description=text,
         color=discord.Color.green()
-    )
-
-    await interaction.response.send_message(embed=embed)
-
-# ==========================================================
-# SUCCESS RATE COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="successranking",
-    description="成功率ランキング"
-)
-async def successranking(interaction: discord.Interaction):
-
-    ranking = await build_success_ranking(interaction.guild)
-
-    if not ranking:
-
-        await interaction.response.send_message(
-            "データがありません"
-        )
-
-        return
-
-    text = ""
-
-    pos = 1
-
-    for name, rate in ranking[:10]:
-
-        text += f"{pos}位 {name} : {rate}%\n"
-
-        pos += 1
-
-    embed = discord.Embed(
-        title="成功率ランキング",
-        description=text,
-        color=discord.Color.orange()
     )
 
     await interaction.response.send_message(embed=embed)
