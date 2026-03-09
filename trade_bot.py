@@ -16,7 +16,7 @@ from threading import Thread
 # CONFIG
 # ==========================================================
 
-TOKEN = "MTQ3OTc5MjczNjQyODEwMTcwMg.Gyy0Oz.woCYNyIj6L2IZtMIm-W_owvWNuoyxYzT6Ac4DE"
+TOKEN = "discord_token"
 
 STAFF_ROLE_ID = 1478964390530121964
 STATS_CHANNEL_ID = 1479271849283293256
