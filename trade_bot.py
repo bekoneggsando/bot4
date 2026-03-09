@@ -793,6 +793,66 @@ async def addtrade(
     )
 
 # ==========================================================
+# PART 5
+# ADMIN / SYSTEM COMMANDS
+# ==========================================================
+
+# ==========================================================
+# ADMIN CHECK
+# ==========================================================
+
+def is_admin(user: discord.Member):
+
+    return user.guild_permissions.administrator
+
+
+# ==========================================================
+# ADD TRADE COMMAND
+# ==========================================================
+
+@bot.tree.command(
+    name="addtrade",
+    description="取引を手動追加（管理者）"
+)
+async def addtrade(
+    interaction: discord.Interaction,
+    staff: discord.Member,
+    rating: int
+):
+
+    if not is_admin(interaction.user):
+
+        await interaction.response.send_message(
+            "管理者専用コマンドです",
+            ephemeral=True
+        )
+
+        return
+
+    today = datetime.date.today().isoformat()
+
+    await db.execute(
+        """
+        INSERT INTO trades(staff_id,user_id,rating,comment,date)
+        VALUES(?,?,?,?,?)
+        """,
+        (
+            staff.id,
+            interaction.user.id,
+            rating,
+            "admin add",
+            today
+        )
+    )
+
+    await db.commit()
+
+    await interaction.response.send_message(
+        "取引を追加しました"
+    )
+
+
+# ==========================================================
 # RESET STATS
 # ==========================================================
 
@@ -813,14 +873,13 @@ async def resetstats(interaction: discord.Interaction):
 
     await db.execute("DELETE FROM trades")
     await db.execute("DELETE FROM failures")
-    await db.execute("DELETE FROM staff_reviews")
-    await db.execute("DELETE FROM server_reviews")
 
     await db.commit()
 
     await interaction.response.send_message(
         "統計をリセットしました"
     )
+
 
 # ==========================================================
 # FORCE STATS UPDATE
@@ -847,28 +906,6 @@ async def forcestats(interaction: discord.Interaction):
         "統計を更新しました"
     )
 
-# ==========================================================
-# BOT RELOAD
-# ==========================================================
-
-@bot.tree.command(
-    name="reloadbot",
-    description="BOT再読み込み（管理者）"
-)
-async def reloadbot(interaction: discord.Interaction):
-
-    if not is_admin(interaction.user):
-
-        await interaction.response.send_message(
-            "管理者専用コマンドです",
-            ephemeral=True
-        )
-
-        return
-
-    await interaction.response.send_message(
-        "BOTを再起動してください（Railwayなど）"
-    )
 
 # ==========================================================
 # BOT INFO
@@ -888,50 +925,48 @@ async def help_tradebot(interaction: discord.Interaction):
     embed.add_field(
         name="取引",
         value="""
-        /finish
-        """,
+/finish
+""",
         inline=False
     )
 
     embed.add_field(
         name="プロフィール",
         value="""
-        /staffprofile
-        /serverprofile
-        """,
+/staffprofile
+""",
         inline=False
     )
 
     embed.add_field(
         name="レビュー",
         value="""
-        /reviews_staff
-        /reviews_server
-        """,
+/reviews_staff
+""",
         inline=False
     )
 
     embed.add_field(
         name="ランキング",
         value="""
-        /staffranking
-        /traderanking
-        /successranking
-        """,
+/staffranking
+/traderanking
+""",
         inline=False
     )
 
     embed.add_field(
         name="管理者",
         value="""
-        /addtrade
-        /resetstats
-        /forcestats
-        """,
+/addtrade
+/resetstats
+/forcestats
+""",
         inline=False
     )
 
     await interaction.response.send_message(embed=embed)
+
 
 # ==========================================================
 # SYSTEM READY MESSAGE
@@ -942,12 +977,15 @@ async def on_connect():
 
     print("Bot connected")
 
+
 @bot.event
 async def on_disconnect():
 
     print("Bot disconnected")
 
+
 # ==========================================================
 # END
 # ==========================================================
+
 bot.run(TOKEN)
