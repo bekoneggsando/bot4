@@ -316,8 +316,9 @@ async def update_stats():
     channel = bot.get_channel(STATS_CHANNEL_ID)
     if channel is None:
         return
-    new_content = await generate_stats_text()  # await をつける
+    new_content = await generate_stats_text()  # ← await が必要
     await channel.send(new_content)
+
 
 
 
