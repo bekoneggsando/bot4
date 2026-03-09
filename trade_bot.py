@@ -202,19 +202,20 @@ keep_alive()
 # TRADE SAVE
 # ==========================================================
 
-async def save_trade(staff_id, success, user_id):
+async def save_trade(staff_id, user_id, rating, comment):
 
     today = datetime.date.today().isoformat()
 
     await db.execute(
         """
-        INSERT INTO trades(staff,success,user,date)
-        VALUES(?,?,?,?)
+        INSERT INTO trades(staff_id,user_id,rating,comment,date)
+        VALUES(?,?,?,?,?)
         """,
-        (staff_id, success, user_id, today)
+        (staff_id, user_id, rating, comment, today)
     )
 
     await db.commit()
+
 
 # ==========================================================
 # FAILURE SAVE
@@ -234,41 +235,6 @@ async def save_failure(reason, comment):
 
     await db.commit()
 
-# ==========================================================
-# SERVER REVIEW SAVE
-# ==========================================================
-
-async def save_server_review(rating):
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO server_reviews(rating,comment,date)
-        VALUES(?,?,?)
-        """,
-        (rating, "", today)
-    )
-
-    await db.commit()
-
-# ==========================================================
-# STAFF REVIEW SAVE
-# ==========================================================
-
-async def save_staff_review(staff_id, rating):
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO staff_reviews(staff,rating,comment,date)
-        VALUES(?,?,?,?)
-        """,
-        (staff_id, rating, "", today)
-    )
-
-    await db.commit()
 
 # ==========================================================
 # FAILURE VIEW
@@ -324,48 +290,6 @@ class FailureReasonView(discord.ui.View):
 
         await self.process(interaction, "その他")
 
-# ==========================================================
-# SERVER REVIEW VIEW
-# ==========================================================
-
-class ServerReviewView(discord.ui.View):
-
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    async def process(self, interaction, rating):
-
-        await save_server_review(rating)
-
-        await interaction.response.send_message(
-            "スタッフを評価してください",
-            view=StaffReviewView()
-        )
-
-    @discord.ui.button(label="⭐1", style=discord.ButtonStyle.gray)
-    async def r1(self, interaction, button):
-
-        await self.process(interaction,1)
-
-    @discord.ui.button(label="⭐2", style=discord.ButtonStyle.gray)
-    async def r2(self, interaction, button):
-
-        await self.process(interaction,2)
-
-    @discord.ui.button(label="⭐3", style=discord.ButtonStyle.gray)
-    async def r3(self, interaction, button):
-
-        await self.process(interaction,3)
-
-    @discord.ui.button(label="⭐4", style=discord.ButtonStyle.gray)
-    async def r4(self, interaction, button):
-
-        await self.process(interaction,4)
-
-    @discord.ui.button(label="⭐5", style=discord.ButtonStyle.green)
-    async def r5(self, interaction, button):
-
-        await self.process(interaction,5)
 
 # ==========================================================
 # STAFF REVIEW VIEW
@@ -373,28 +297,18 @@ class ServerReviewView(discord.ui.View):
 
 class StaffReviewView(discord.ui.View):
 
-    def __init__(self):
+    def __init__(self, staff_id):
         super().__init__(timeout=None)
+        self.staff_id = staff_id
 
     async def process(self, interaction, rating):
 
-        staff_member = None
-
-        for m in interaction.channel.members:
-
-            if discord.utils.get(m.roles, id=STAFF_ROLE_ID):
-
-                staff_member = m
-
-        if staff_member:
-
-            await save_staff_review(staff_member.id, rating)
-
-            await save_trade(
-                staff_member.id,
-                1,
-                interaction.user.id
-            )
+        await save_trade(
+            self.staff_id,
+            interaction.user.id,
+            rating,
+            ""
+        )
 
         await interaction.response.send_message(
             "レビューありがとうございました！"
@@ -403,27 +317,28 @@ class StaffReviewView(discord.ui.View):
     @discord.ui.button(label="⭐1", style=discord.ButtonStyle.gray)
     async def r1(self, interaction, button):
 
-        await self.process(interaction,1)
+        await self.process(interaction, 1)
 
     @discord.ui.button(label="⭐2", style=discord.ButtonStyle.gray)
     async def r2(self, interaction, button):
 
-        await self.process(interaction,2)
+        await self.process(interaction, 2)
 
     @discord.ui.button(label="⭐3", style=discord.ButtonStyle.gray)
     async def r3(self, interaction, button):
 
-        await self.process(interaction,3)
+        await self.process(interaction, 3)
 
     @discord.ui.button(label="⭐4", style=discord.ButtonStyle.gray)
     async def r4(self, interaction, button):
 
-        await self.process(interaction,4)
+        await self.process(interaction, 4)
 
     @discord.ui.button(label="⭐5", style=discord.ButtonStyle.green)
     async def r5(self, interaction, button):
 
-        await self.process(interaction,5)
+        await self.process(interaction, 5)
+
 
 # ==========================================================
 # FINISH VIEW
@@ -431,15 +346,16 @@ class StaffReviewView(discord.ui.View):
 
 class FinishView(discord.ui.View):
 
-    def __init__(self):
+    def __init__(self, staff_id):
         super().__init__(timeout=None)
+        self.staff_id = staff_id
 
     @discord.ui.button(label="成功", style=discord.ButtonStyle.green)
     async def success(self, interaction, button):
 
         await interaction.response.send_message(
-            "サーバー評価をしてください",
-            view=ServerReviewView()
+            "スタッフ評価をしてください",
+            view=StaffReviewView(self.staff_id)
         )
 
     @discord.ui.button(label="失敗", style=discord.ButtonStyle.red)
@@ -449,6 +365,7 @@ class FinishView(discord.ui.View):
             "失敗理由を選択してください",
             view=FailureReasonView()
         )
+
 
 # ==========================================================
 # FINISH COMMAND
@@ -460,36 +377,20 @@ class FinishView(discord.ui.View):
 )
 async def finish(interaction: discord.Interaction):
 
+    # スタッフのみ使用可能
+    if not discord.utils.get(interaction.user.roles, id=STAFF_ROLE_ID):
+
+        await interaction.response.send_message(
+            "このコマンドは仲介スタッフのみ使用できます",
+            ephemeral=True
+        )
+
+        return
+
     await interaction.response.send_message(
         "取引結果を選択してください",
-        view=FinishView()
+        view=FinishView(interaction.user.id)
     )
-async def get_staff_review_stats(staff_id):
-    # データベースからスタッフレビュー統計を取得
-    async with aiosqlite.connect("trade.db") as db:
-        cursor = await db.execute(
-            "SELECT COUNT(*), AVG(rating) FROM staff_reviews WHERE staff_id = ?",
-            (staff_id,)
-        )
-        count, avg_rating = await cursor.fetchone()
-    return {"count": count, "avg_rating": avg_rating}
-# 既存の 'finish' コマンドを削除
-existing = bot.tree.get_command("finish")
-if existing:
-    bot.tree.remove_command("finish")
-
-# 新しい finish コマンドを登録
-@bot.tree.command(name="finish", description="仲介取引を完了します")
-@app_commands.describe(
-    success="成功ならはい、失敗ならいいえ",
-    comment="取引に関するコメントを入力してください（任意）"
-)
-async def finish(interaction: discord.Interaction, success: bool, comment: str = None):
-    await interaction.response.send_message(
-        f"取引完了！ 成功: {success}\nコメント: {comment or 'なし'}",
-        ephemeral=True
-    )
-
 
 # ==========================================================
 # PART 3
