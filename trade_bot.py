@@ -600,7 +600,14 @@ class FinishView(discord.ui.View):
 
 @bot.tree.command(
     name="finish",
-    descri
+    description="取引を終了します"
+)
+async def finish(interaction: discord.Interaction):
+
+    await interaction.response.send_message(
+        "取引結果を選択してください",
+        view=FinishView()
+    )
 # ==========================================================
 # PART 3
 # PROFILE / REVIEW STATS / REVIEW VIEW
