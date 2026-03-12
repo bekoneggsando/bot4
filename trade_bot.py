@@ -1,990 +1,266 @@
-# ==========================================================
-# TRADE BOT COMPLETE SYSTEM
-# PART 1
-# ==========================================================
-
 import os
 import discord
-from discord.ext import commands, tasks
 from discord import app_commands
-import aiosqlite
-import datetime
+from discord.ext import commands, tasks
+import sqlite3
 import math
-from flask import Flask
-from threading import Thread
-
-# ==========================================================
-# CONFIG
-# ==========================================================
-
-TOKEN = os.getenv("TOKEN")
-
-STAFF_ROLE_ID = 1478964390530121964
-STATS_CHANNEL_ID = 1479271849283293256
-LOG_CHANNEL_ID = 1480455928699555992
-
-DATABASE_NAME = "tradebot.db"
-
-# ==========================================================
-# BOT SETUP
-# ==========================================================
-
-intents = discord.Intents.all()
-
-bot = commands.Bot(
-    command_prefix="!",
-    intents=intents
-)
-
-db = None
-stats_message = None
-
-# ==========================================================
-# DATABASE
-# ==========================================================
-
-async def init_database():
-
-    global db
-
-    db = await aiosqlite.connect(DATABASE_NAME)
-
-    await db.execute("""
-    CREATE TABLE IF NOT EXISTS trades(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        staff_id INTEGER,
-        user_id INTEGER,
-        rating INTEGER,
-        comment TEXT,
-        date TEXT
-    )
-    """)
-
-    await db.commit()
-
-# ==========================================================
-# GENERATE STATS EMBED
-# ==========================================================
-
-async def generate_stats_embed():
-
-    embed = discord.Embed(
-        title="📊 仲介取引統計",
-        color=0x00ffcc
-    )
-
-    # ======================================
-    # 信頼度ランキング
-    # ======================================
-
-    cursor = await db.execute("""
-    SELECT staff_id, AVG(rating), COUNT(*)
-    FROM trades
-    GROUP BY staff_id
-    ORDER BY AVG(rating) DESC
-    LIMIT 10
-    """)
-
-    rows = await cursor.fetchall()
-
-    trust_text = ""
-
-    for i, row in enumerate(rows, start=1):
-
-        staff = bot.get_user(row[0])
-        rating = round(row[1], 2)
-        count = row[2]
-
-        if staff:
-            trust_text += f"{i}. {staff.name} ⭐{rating} ({count}件)\n"
-
-    if trust_text == "":
-        trust_text = "データなし"
-
-    embed.add_field(
-        name="🏆 信頼度ランキング",
-        value=trust_text,
-        inline=False
-    )
-
-    # ======================================
-    # 取引数ランキング
-    # ======================================
-
-    cursor = await db.execute("""
-    SELECT staff_id, COUNT(*)
-    FROM trades
-    GROUP BY staff_id
-    ORDER BY COUNT(*) DESC
-    LIMIT 10
-    """)
-
-    rows = await cursor.fetchall()
-
-    trade_text = ""
-
-    for i, row in enumerate(rows, start=1):
-
-        staff = bot.get_user(row[0])
-        count = row[1]
-
-        if staff:
-            trade_text += f"{i}. {staff.name} {count}件\n"
-
-    if trade_text == "":
-        trade_text = "データなし"
-
-    embed.add_field(
-        name="📊 取引数ランキング",
-        value=trade_text,
-        inline=False
-    )
-
-    embed.set_footer(text="TradeBot Statistics")
-
-    return embed
-
-# ==========================================================
-# STATS LOOP
-# ==========================================================
-
-@tasks.loop(minutes=5)
-async def update_stats():
-
-    global stats_message
-
-    if stats_message:
-
-        embed = await generate_stats_embed()
-
-        await stats_message.edit(
-            content=None,
-            embed=embed
-        )
-
-# ==========================================================
-# BOT READY
-# ==========================================================
-
-@bot.event
-async def on_ready():
-
-    global stats_message
-
-    print("BOT STARTING")
-
-    await init_database()
-    await bot.tree.sync()
-
-    channel = bot.get_channel(STATS_CHANNEL_ID)
-
-    if channel:
-
-        embed = await generate_stats_embed()
-
-        stats_message = await channel.send(embed=embed)
-
-    update_stats.start()
-
-    print("BOT READY")
-
-# ==========================================================
-# START
-# ==========================================================
-
-# ==========================================================
-# PART 2
-# FINISH SYSTEM / REVIEW UI
-# ==========================================================
-
-# ==========================================================
-# TRADE SAVE
-# ==========================================================
-
-async def save_trade(staff_id, user_id, rating, comment):
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO trades(staff_id,user_id,rating,comment,date)
-        VALUES(?,?,?,?,?)
-        """,
-        (staff_id, user_id, rating, comment, today)
-    )
-
-    await db.commit()
-
-
-# ==========================================================
-# FAILURE SAVE
-# ==========================================================
-
-async def save_failure(reason, comment):
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO failures(reason,comment,date)
-        VALUES(?,?,?)
-        """,
-        (reason, comment, today)
-    )
-
-    await db.commit()
-
-
-# ==========================================================
-# FAILURE VIEW
-# ==========================================================
-
-class FailureReasonView(discord.ui.View):
-
+import datetime
+
+# ================= 設定エリア =================
+# Railwayの「Variables」で DISCORD_TOKEN という名前で値を設定してください
+TOKEN = os.getenv('DISCORD_TOKEN')
+
+# 以下のIDは、あなたのサーバーのものに書き換えてください
+GUILD_ID = 1478366462144942120          # サーバーID
+SERVER_REVIEW_CH_ID = 1479271799492710450  # サーバーレビュー用
+STAFF_REVIEW_CH_ID = 1479125489506586735   # スタッフレビュー用
+PANEL_CH_ID = 1479271849283293256          # 統計パネル用
+# =============================================
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents)
+        self.db = sqlite3.connect('mediation.db')
+        self.cursor = self.db.cursor()
+        self.init_db()
+
+    def init_db(self):
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS deals (
+            deal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            staff_id INTEGER,
+            result TEXT,
+            timestamp DATETIME
+        )''')
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deal_id INTEGER,
+            staff_id INTEGER,
+            reviewer_id INTEGER,
+            type TEXT,
+            stars INTEGER,
+            comment TEXT
+        )''')
+        self.db.commit()
+
+    async def setup_hook(self):
+        # 1. 永続的なボタン（View）を登録
+        self.add_view(PersistentFinishView())
+        
+        # 2. サーバー（ギルド）に対してコマンドを強制同期
+        guild = discord.Object(id=GUILD_ID)
+        self.tree.copy_global_to(guild=guild)
+        await self.tree.sync(guild=guild)
+        
+        # 3. 統計パネルのループを開始
+        self.update_panel.start()
+        print(f"Server ID: {GUILD_ID} にコマンドを同期しました")
+
+    async def on_ready(self):
+        print(f'Logged in as {self.user}')
+        try:
+            await self.refresh_stats_panel()
+            print("統計パネルの初回更新が完了しました。")
+        except Exception as e:
+            print(f"パネル更新中にエラーが発生しました: {e}")
+
+    @tasks.loop(minutes=5)
+    async def update_panel(self):
+        await self.refresh_stats_panel()
+
+    async def refresh_stats_panel(self):
+        channel = bot.get_channel(PANEL_CH_ID)
+        if not channel:
+            print(f"警告: チャンネル(ID:{PANEL_CH_ID})が見つかりません。")
+            return
+
+        self.cursor.execute("SELECT COUNT(*), SUM(CASE WHEN result='成功' THEN 1 ELSE 0 END), SUM(CASE WHEN result='失敗' THEN 1 ELSE 0 END) FROM deals")
+        total, success, fail = self.cursor.fetchone()
+        total, success, fail = total or 0, success or 0, fail or 0
+        
+        now = datetime.datetime.now()
+        this_month = now.strftime('%Y-%m')
+        self.cursor.execute("SELECT COUNT(*) FROM deals WHERE strftime('%Y-%m', timestamp) = ?", (this_month,))
+        month_count = self.cursor.fetchone()[0]
+
+        embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
+        embed.add_field(name="取引総数", value=f"{total}件", inline=True)
+        embed.add_field(name="成功数", value=f"✅ {success}", inline=True)
+        embed.add_field(name="失敗数", value=f"❌ {fail}", inline=True)
+        embed.add_field(name="今月の取引", value=f"{month_count}件", inline=True)
+
+        self.cursor.execute("""
+            SELECT d.staff_id, 
+                   COUNT(d.deal_id) as total_deals,
+                   (SELECT COUNT(*) FROM reviews r WHERE r.staff_id = d.staff_id AND r.type='staff') as review_count,
+                   (SELECT AVG(stars) FROM reviews r WHERE r.staff_id = d.staff_id AND r.type='staff') as avg_stars
+            FROM deals d GROUP BY d.staff_id
+        """)
+        staff_data = self.cursor.fetchall()
+        
+        ranked_list = []
+        for s_id, t_deals, r_count, a_stars in staff_data:
+            a_stars = a_stars or 0
+            score = a_stars * math.log1p(r_count) * math.log1p(t_deals)
+            ranked_list.append({'id': s_id, 'score': score, 'deals': t_deals, 'stars': a_stars, 'revs': r_count})
+        
+        trust_rank = sorted(ranked_list, key=lambda x: x['score'], reverse=True)[:5]
+        trust_text = "\n".join([f"{i+1}位: <@{s['id']}> (Score: {s['score']:.1f})" for i, s in enumerate(trust_rank)]) or "データなし"
+        embed.add_field(name="🏆 信頼度ランキング", value=trust_text, inline=False)
+
+        deal_rank = sorted(ranked_list, key=lambda x: x['deals'], reverse=True)[:5]
+        deal_text = "\n".join([f"{i+1}位: <@{s['id']}> ({s['deals']}件)" for i, s in enumerate(deal_rank)]) or "データなし"
+        embed.add_field(name="📈 取引数ランキング", value=deal_text, inline=False)
+        embed.set_footer(text=f"最終更新: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        last_msg = None
+        async for message in channel.history(limit=5):
+            if message.author == self.user:
+                last_msg = message
+                break
+        
+        if last_msg:
+            await last_msg.edit(embed=embed)
+        else:
+            await channel.send(embed=embed)
+
+bot = MyBot()
+
+# --- レビューモーダル ---
+class ReviewModal(discord.ui.Modal):
+    def __init__(self, deal_id, staff_id, review_type):
+        title = "サーバーレビュー" if review_type == "server" else "スタッフレビュー"
+        super().__init__(title=title)
+        self.deal_id = deal_id
+        self.staff_id = staff_id
+        self.review_type = review_type
+
+        self.stars_input = discord.ui.TextInput(label="星評価 (1-5)", placeholder="5", min_length=1, max_length=1)
+        self.comment_input = discord.ui.TextInput(label="コメント", style=discord.TextStyle.paragraph, min_length=5)
+        self.add_item(self.stars_input)
+        self.add_item(self.comment_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not self.stars_input.value.isdigit() or not (1 <= int(self.stars_input.value) <= 5):
+            return await interaction.response.send_message("評価は1〜5の数字で入力してください。", ephemeral=True)
+        
+        star_num = int(self.stars_input.value)
+        
+        bot.cursor.execute("INSERT INTO reviews (deal_id, staff_id, reviewer_id, type, stars, comment) VALUES (?, ?, ?, ?, ?, ?)",
+                           (self.deal_id, self.staff_id, interaction.user.id, self.review_type, star_num, self.comment_input.value))
+        bot.db.commit()
+
+        ch_id = SERVER_REVIEW_CH_ID if self.review_type == "server" else STAFF_REVIEW_CH_ID
+        channel = bot.get_channel(ch_id)
+        if channel:
+            embed = discord.Embed(title=f"新着{self.title}", color=discord.Color.gold())
+            embed.add_field(name="評価", value="⭐" * star_num)
+            embed.add_field(name="投稿者", value=interaction.user.mention)
+            if self.review_type == "staff":
+                embed.add_field(name="対象スタッフ", value=f"<@{self.staff_id}>")
+            embed.add_field(name="コメント", value=self.comment_input.value, inline=False)
+            await channel.send(embed=embed)
+
+        await interaction.response.send_message("レビューを投稿しました！", ephemeral=True)
+
+# --- 取引終了ボタン ---
+class PersistentFinishView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    async def process(self, interaction, reason):
+    @discord.ui.button(label="成功", style=discord.ButtonStyle.success, custom_id="finish_success")
+    async def success(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_finish(interaction, "成功")
 
-        await save_failure(reason, "")
+    @discord.ui.button(label="失敗", style=discord.ButtonStyle.danger, custom_id="finish_fail")
+    async def fail(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_finish(interaction, "失敗")
 
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    async def process_finish(self, interaction, result):
+        bot.cursor.execute("INSERT INTO deals (staff_id, result, timestamp) VALUES (?, ?, ?)",
+                           (interaction.user.id, result, datetime.datetime.now()))
+        deal_id = bot.cursor.lastrowid
+        bot.db.commit()
 
-        if log_channel:
+        await interaction.response.edit_message(content=f"取引を「{result}」で記録しました。", view=None)
 
-            embed = discord.Embed(
-                title="取引失敗",
-                description=reason,
-                color=discord.Color.red()
-            )
+        if result == "成功":
+            view = discord.ui.View()
+            btn_server = discord.ui.Button(label="サーバーをレビュー", style=discord.ButtonStyle.primary)
+            btn_staff = discord.ui.Button(label="スタッフをレビュー", style=discord.ButtonStyle.secondary)
+            
+            # ↓ ここに def をしっかり追加しました
+            async def server_callback(i: discord.Interaction):
+                if i.user.id == interaction.user.id:
+                    return await i.response.send_message("自分自身はレビューできません。", ephemeral=True)
+                await i.response.send_modal(ReviewModal(deal_id, interaction.user.id, "server"))
 
-            embed.add_field(
-                name="ユーザー",
-                value=interaction.user.mention
-            )
+            async def staff_callback(i: discord.Interaction):
+                if i.user.id == interaction.user.id:
+                    return await i.response.send_message("自分自身はレビューできません。", ephemeral=True)
+                await i.response.send_modal(ReviewModal(deal_id, interaction.user.id, "staff"))
 
-            await log_channel.send(embed=embed)
+            btn_server.callback = server_callback
+            btn_staff.callback = staff_callback
+            view.add_item(btn_server)
+            view.add_item(btn_staff)
+            
+            await interaction.followup.send("レビューをお願いします！", view=view)
 
-        await interaction.response.send_message(
-            "改善点を記録しました。"
-        )
+# --- スラッシュコマンド ---
 
-    @discord.ui.button(label="対応が遅い", style=discord.ButtonStyle.gray)
-    async def slow(self, interaction, button):
-
-        await self.process(interaction, "対応が遅い")
-
-    @discord.ui.button(label="条件不一致", style=discord.ButtonStyle.gray)
-    async def condition(self, interaction, button):
-
-        await self.process(interaction, "条件不一致")
-
-    @discord.ui.button(label="トラブル", style=discord.ButtonStyle.gray)
-    async def trouble(self, interaction, button):
-
-        await self.process(interaction, "トラブル")
-
-    @discord.ui.button(label="その他", style=discord.ButtonStyle.gray)
-    async def other(self, interaction, button):
-
-        await self.process(interaction, "その他")
-
-
-# ==========================================================
-# STAFF REVIEW VIEW
-# ==========================================================
-
-class StaffReviewView(discord.ui.View):
-
-    def __init__(self, staff_id):
-        super().__init__(timeout=None)
-        self.staff_id = staff_id
-
-    async def process(self, interaction, rating):
-
-        await save_trade(
-            self.staff_id,
-            interaction.user.id,
-            rating,
-            ""
-        )
-
-        await interaction.response.send_message(
-            "レビューありがとうございました！"
-        )
-
-    @discord.ui.button(label="⭐1", style=discord.ButtonStyle.gray)
-    async def r1(self, interaction, button):
-
-        await self.process(interaction, 1)
-
-    @discord.ui.button(label="⭐2", style=discord.ButtonStyle.gray)
-    async def r2(self, interaction, button):
-
-        await self.process(interaction, 2)
-
-    @discord.ui.button(label="⭐3", style=discord.ButtonStyle.gray)
-    async def r3(self, interaction, button):
-
-        await self.process(interaction, 3)
-
-    @discord.ui.button(label="⭐4", style=discord.ButtonStyle.gray)
-    async def r4(self, interaction, button):
-
-        await self.process(interaction, 4)
-
-    @discord.ui.button(label="⭐5", style=discord.ButtonStyle.green)
-    async def r5(self, interaction, button):
-
-        await self.process(interaction, 5)
-
-
-# ==========================================================
-# FINISH VIEW
-# ==========================================================
-
-class FinishView(discord.ui.View):
-
-    def __init__(self, staff_id):
-        super().__init__(timeout=None)
-        self.staff_id = staff_id
-
-    @discord.ui.button(label="成功", style=discord.ButtonStyle.green)
-    async def success(self, interaction, button):
-
-        await interaction.response.send_message(
-            "スタッフ評価をしてください",
-            view=StaffReviewView(self.staff_id)
-        )
-
-    @discord.ui.button(label="失敗", style=discord.ButtonStyle.red)
-    async def fail(self, interaction, button):
-
-        await interaction.response.send_message(
-            "失敗理由を選択してください",
-            view=FailureReasonView()
-        )
-
-
-# ==========================================================
-# FINISH COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="finish",
-    description="取引を終了します"
-)
+@bot.tree.command(name="finish", description="取引終了")
 async def finish(interaction: discord.Interaction):
+    await interaction.response.send_message("取引結果を選択してください：", view=PersistentFinishView())
 
-    # スタッフのみ使用可能
-    if not discord.utils.get(interaction.user.roles, id=STAFF_ROLE_ID):
+@bot.tree.command(name="profile", description="スタッフプロフィール表示")
+async def profile(interaction: discord.Interaction, user: discord.Member):
+    bot.cursor.execute("""
+        SELECT 
+            COUNT(*), 
+            SUM(CASE WHEN result='成功' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN result='失敗' THEN 1 ELSE 0 END)
+        FROM deals WHERE staff_id = ?
+    """, (user.id,))
+    total, success, fail = bot.cursor.fetchone()
+    total, success, fail = total or 0, success or 0, fail or 0
+    
+    bot.cursor.execute("SELECT COUNT(*), AVG(stars) FROM reviews WHERE staff_id = ? AND type='staff'", (user.id,))
+    rev_count, avg_stars = bot.cursor.fetchone()
+    rev_count, avg_stars = rev_count or 0, avg_stars or 0
+    
+    rate = (success / total * 100) if total > 0 else 0
+    score = avg_stars * math.log1p(rev_count) * math.log1p(total)
 
-        await interaction.response.send_message(
-            "このコマンドは仲介スタッフのみ使用できます",
-            ephemeral=True
-        )
-
-        return
-
-    await interaction.response.send_message(
-        "取引結果を選択してください",
-        view=FinishView(interaction.user.id)
-    )
-
-# ==========================================================
-# PART 3
-# PROFILE / REVIEW STATS / REVIEW VIEW
-# ==========================================================
-
-# ==========================================================
-# STAFF REVIEW STATS
-# ==========================================================
-
-async def get_staff_review_stats(staff_id):
-
-    async with db.execute(
-        """
-        SELECT rating FROM trades
-        WHERE staff_id=?
-        """,
-        (staff_id,)
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    ratings = [r[0] for r in rows if r[0] is not None]
-
-    if len(ratings) == 0:
-
-        return {
-            "count": 0,
-            "avg": 0,
-            "stars": {1:0,2:0,3:0,4:0,5:0}
-        }
-
-    avg = round(sum(ratings)/len(ratings),2)
-
-    star_count = {
-        1: ratings.count(1),
-        2: ratings.count(2),
-        3: ratings.count(3),
-        4: ratings.count(4),
-        5: ratings.count(5)
-    }
-
-    return {
-        "count": len(ratings),
-        "avg": avg,
-        "stars": star_count
-    }
-
-
-# ==========================================================
-# STAFF PROFILE COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="staffprofile",
-    description="スタッフのプロフィールを見る"
-)
-async def staffprofile(
-    interaction: discord.Interaction,
-    member: discord.Member
-):
-
-    stats = await get_staff_review_stats(member.id)
-
-    async with db.execute(
-        """
-        SELECT COUNT(*) FROM trades
-        WHERE staff_id=?
-        """,
-        (member.id,)
-    ) as cur:
-
-        trades = (await cur.fetchone())[0]
-
-    embed = discord.Embed(
-        title=f"{member.name} スタッフプロフィール",
-        color=discord.Color.blue()
-    )
-
-    embed.add_field(
-        name="取引数",
-        value=str(trades)
-    )
-
-    embed.add_field(
-        name="レビュー数",
-        value=str(stats["count"])
-    )
-
-    embed.add_field(
-        name="平均評価",
-        value=f"⭐{stats['avg']}"
-    )
-
-    star_text = ""
-
-    for i in range(5,0,-1):
-
-        star_text += f"{i}⭐ : {stats['stars'][i]}\n"
-
-    embed.add_field(
-        name="星内訳",
-        value=star_text,
-        inline=False
-    )
-
+    embed = discord.Embed(title=f"👤 スタッフプロフィール: {user.display_name}", color=discord.Color.green())
+    embed.add_field(name="総取引数", value=f"{total}回", inline=True)
+    embed.add_field(name="成功 / 失敗", value=f"✅{success} / ❌{fail}", inline=True)
+    embed.add_field(name="成功率", value=f"{rate:.1f}%", inline=True)
+    embed.add_field(name="平均評価", value=f"★{avg_stars:.1f}", inline=True)
+    embed.add_field(name="レビュー数", value=f"{rev_count}件", inline=True)
+    embed.add_field(name="信用スコア", value=f"{score:.1f}", inline=True)
+    
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="view_reviews", description="指定した星の数のレビューを表示")
+@app_commands.choices(type=[
+    app_commands.Choice(name="サーバーレビュー", value="server"),
+    app_commands.Choice(name="スタッフレビュー", value="staff")
+])
+async def view_reviews(interaction: discord.Interaction, type: str, stars: int):
+    if not (1 <= stars <= 5):
+        return await interaction.response.send_message("星は1〜5で指定してください。", ephemeral=True)
 
-# ==========================================================
-# STAFF REVIEWS LIST
-# ==========================================================
-
-@bot.tree.command(
-    name="reviews_staff",
-    description="スタッフレビューを見る"
-)
-async def reviews_staff(
-    interaction: discord.Interaction,
-    member: discord.Member
-):
-
-    async with db.execute(
-        """
-        SELECT rating,date FROM trades
-        WHERE staff_id=?
-        ORDER BY id DESC
-        LIMIT 10
-        """,
-        (member.id,)
-    ) as cur:
-
-        rows = await cur.fetchall()
-
+    bot.cursor.execute("SELECT stars, comment, reviewer_id FROM reviews WHERE type = ? AND stars = ? ORDER BY id DESC LIMIT 5", (type, stars))
+    rows = bot.cursor.fetchall()
+    
     if not rows:
-
-        await interaction.response.send_message(
-            "レビューがありません"
-        )
-
-        return
-
-    text = ""
-
-    for r in rows:
-
-        text += f"⭐{r[0]} | {r[1]}\n"
-
-    embed = discord.Embed(
-        title=f"{member.name} のレビュー",
-        description=text,
-        color=discord.Color.blue()
-    )
-
-    await interaction.response.send_message(embed=embed)
-# ==========================================================
-# PART 4
-# RANKING SYSTEM
-# ==========================================================
-
-# ==========================================================
-# GET ALL STAFF IDS
-# ==========================================================
-
-async def get_all_staff_ids():
-
-    async with db.execute(
-        """
-        SELECT DISTINCT staff_id FROM trades
-        """
-    ) as cur:
-
-        rows = await cur.fetchall()
-
-    return [r[0] for r in rows]
-
-
-# ==========================================================
-# STAFF TRADE COUNT
-# ==========================================================
-
-async def get_staff_trade_count(staff_id):
-
-    async with db.execute(
-        """
-        SELECT COUNT(*) FROM trades
-        WHERE staff_id=?
-        """,
-        (staff_id,)
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    return row[0]
-
-
-# ==========================================================
-# STAFF AVG RATING
-# ==========================================================
-
-async def get_staff_avg_rating(staff_id):
-
-    async with db.execute(
-        """
-        SELECT AVG(rating) FROM trades
-        WHERE staff_id=? AND rating IS NOT NULL
-        """,
-        (staff_id,)
-    ) as cur:
-
-        row = await cur.fetchone()
-
-    if row[0] is None:
-        return 0
-
-    return round(row[0], 2)
-
-
-# ==========================================================
-# STAFF TRUST RANKING
-# ==========================================================
-
-async def build_staff_trust_ranking(guild):
-
-    staff_ids = await get_all_staff_ids()
-
-    ranking = []
-
-    for staff_id in staff_ids:
-
-        rating = await get_staff_avg_rating(staff_id)
-
-        member = guild.get_member(staff_id)
-
-        if member:
-
-            ranking.append((member.name, rating))
-
-    ranking.sort(key=lambda x: x[1], reverse=True)
-
-    return ranking
-
-
-# ==========================================================
-# STAFF TRADE RANKING
-# ==========================================================
-
-async def build_trade_ranking(guild):
-
-    staff_ids = await get_all_staff_ids()
-
-    ranking = []
-
-    for staff_id in staff_ids:
-
-        count = await get_staff_trade_count(staff_id)
-
-        member = guild.get_member(staff_id)
-
-        if member:
-
-            ranking.append((member.name, count))
-
-    ranking.sort(key=lambda x: x[1], reverse=True)
-
-    return ranking
-
-
-# ==========================================================
-# STAFF TRUST COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="staffranking",
-    description="スタッフ信頼度ランキング"
-)
-async def staffranking(interaction: discord.Interaction):
-
-    ranking = await build_staff_trust_ranking(interaction.guild)
-
-    if not ranking:
-
-        await interaction.response.send_message(
-            "データがありません"
-        )
-
-        return
-
-    text = ""
-
-    pos = 1
-
-    for name, score in ranking[:10]:
-
-        text += f"{pos}位 {name} ⭐{score}\n"
-
-        pos += 1
-
-    embed = discord.Embed(
-        title="🏆 スタッフ信頼度ランキング",
-        description=text,
-        color=discord.Color.purple()
-    )
-
+        return await interaction.response.send_message(f"星{stars}のレビューは見つかりませんでした。", ephemeral=True)
+    
+    embed = discord.Embed(title=f"🔍 星{stars}のレビュー一覧 ({'サーバー' if type == 'server' else 'スタッフ'})", color=discord.Color.orange())
+    for s, c, r_id in rows:
+        embed.add_field(name=f"評価: {'⭐'*s}", value=f"内容: {c}\n投稿者: <@{r_id}>", inline=False)
+    
     await interaction.response.send_message(embed=embed)
 
-
-# ==========================================================
-# TRADE COUNT COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="traderanking",
-    description="取引数ランキング"
-)
-async def traderanking(interaction: discord.Interaction):
-
-    ranking = await build_trade_ranking(interaction.guild)
-
-    if not ranking:
-
-        await interaction.response.send_message(
-            "データがありません"
-        )
-
-        return
-
-    text = ""
-
-    pos = 1
-
-    for name, count in ranking[:10]:
-
-        text += f"{pos}位 {name} : {count}件\n"
-
-        pos += 1
-
-    embed = discord.Embed(
-        title="📊 取引数ランキング",
-        description=text,
-        color=discord.Color.green()
-    )
-
-    await interaction.response.send_message(embed=embed)
-# ==========================================================
-# PART 5
-# ADMIN / SYSTEM COMMANDS
-# ==========================================================
-
-# ==========================================================
-# ADMIN CHECK
-# ==========================================================
-
-def is_admin(user: discord.Member):
-
-    return user.guild_permissions.administrator
-
-# ==========================================================
-# ADD TRADE COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="addtrade",
-    description="取引を手動追加（管理者）"
-)
-async def addtrade(
-    interaction: discord.Interaction,
-    staff: discord.Member,
-    success: bool
-):
-
-    if not is_admin(interaction.user):
-
-        await interaction.response.send_message(
-            "管理者専用コマンドです",
-            ephemeral=True
-        )
-
-        return
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO trades(staff,success,user,date)
-        VALUES(?,?,?,?)
-        """,
-        (
-            staff.id,
-            1 if success else 0,
-            interaction.user.id,
-            today
-        )
-    )
-
-    await db.commit()
-
-    await interaction.response.send_message(
-        "取引を追加しました"
-    )
-
-# ==========================================================
-# PART 5
-# ADMIN / SYSTEM COMMANDS
-# ==========================================================
-
-# ==========================================================
-# ADMIN CHECK
-# ==========================================================
-
-def is_admin(user: discord.Member):
-
-    return user.guild_permissions.administrator
-
-
-# ==========================================================
-# ADD TRADE COMMAND
-# ==========================================================
-
-@bot.tree.command(
-    name="addtrade",
-    description="取引を手動追加（管理者）"
-)
-async def addtrade(
-    interaction: discord.Interaction,
-    staff: discord.Member,
-    rating: int
-):
-
-    if not is_admin(interaction.user):
-
-        await interaction.response.send_message(
-            "管理者専用コマンドです",
-            ephemeral=True
-        )
-
-        return
-
-    today = datetime.date.today().isoformat()
-
-    await db.execute(
-        """
-        INSERT INTO trades(staff_id,user_id,rating,comment,date)
-        VALUES(?,?,?,?,?)
-        """,
-        (
-            staff.id,
-            interaction.user.id,
-            rating,
-            "admin add",
-            today
-        )
-    )
-
-    await db.commit()
-
-    await interaction.response.send_message(
-        "取引を追加しました"
-    )
-
-
-# ==========================================================
-# RESET STATS
-# ==========================================================
-
-@bot.tree.command(
-    name="resetstats",
-    description="統計リセット（管理者）"
-)
-async def resetstats(interaction: discord.Interaction):
-
-    if not is_admin(interaction.user):
-
-        await interaction.response.send_message(
-            "管理者専用コマンドです",
-            ephemeral=True
-        )
-
-        return
-
-    await db.execute("DELETE FROM trades")
-    await db.execute("DELETE FROM failures")
-
-    await db.commit()
-
-    await interaction.response.send_message(
-        "統計をリセットしました"
-    )
-
-
-# ==========================================================
-# FORCE STATS UPDATE
-# ==========================================================
-
-@bot.tree.command(
-    name="forcestats",
-    description="統計更新（管理者）"
-)
-async def forcestats(interaction: discord.Interaction):
-
-    if not is_admin(interaction.user):
-
-        await interaction.response.send_message(
-            "管理者専用コマンドです",
-            ephemeral=True
-        )
-
-        return
-
-    await update_stats()
-
-    await interaction.response.send_message(
-        "統計を更新しました"
-    )
-
-
-# ==========================================================
-# BOT INFO
-# ==========================================================
-
-@bot.tree.command(
-    name="help_tradebot",
-    description="BOTコマンド一覧"
-)
-async def help_tradebot(interaction: discord.Interaction):
-
-    embed = discord.Embed(
-        title="仲介BOTコマンド一覧",
-        color=discord.Color.blue()
-    )
-
-    embed.add_field(
-        name="取引",
-        value="""
-/finish
-""",
-        inline=False
-    )
-
-    embed.add_field(
-        name="プロフィール",
-        value="""
-/staffprofile
-""",
-        inline=False
-    )
-
-    embed.add_field(
-        name="レビュー",
-        value="""
-/reviews_staff
-""",
-        inline=False
-    )
-
-    embed.add_field(
-        name="ランキング",
-        value="""
-/staffranking
-/traderanking
-""",
-        inline=False
-    )
-
-    embed.add_field(
-        name="管理者",
-        value="""
-/addtrade
-/resetstats
-/forcestats
-""",
-        inline=False
-    )
-
-    await interaction.response.send_message(embed=embed)
-
-
-# ==========================================================
-# SYSTEM READY MESSAGE
-# ==========================================================
-
-@bot.event
-async def on_connect():
-
-    print("Bot connected")
-
-
-@bot.event
-async def on_disconnect():
-
-    print("Bot disconnected")
-
-
-# ==========================================================
-# END
-# ==========================================================
-
-bot.run(TOKEN)
+bot.run("TOKEN")
