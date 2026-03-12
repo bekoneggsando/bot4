@@ -263,4 +263,4 @@ async def view_reviews(interaction: discord.Interaction, type: str, stars: int):
     
     await interaction.response.send_message(embed=embed)
 
-bot.run("TOKEN")
+bot.run(TOKEN)
