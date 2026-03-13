@@ -30,6 +30,7 @@ class MyBot(commands.Bot):
             database="postgres",
             user="postgres.tvgctvjmtkvbqmkgyhot",
             password="Aeyvnl123Aeyvnl12"
+            sslmode="require"
         )
         self.cursor = self.conn.cursor()
         self.init_db()
