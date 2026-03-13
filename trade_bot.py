@@ -234,4 +234,57 @@ async def profile(interaction: discord.Interaction, user: discord.Member):
     
     await interaction.followup.send(embed=embed)
 
+@bot.tree.command(name="view_reviews", description="指定した星の数の評価を表示します")
+@app_commands.choices(対象=[
+    app_commands.Choice(name="サーバー評価", value="server"),
+    app_commands.Choice(name="スタッフ評価", value="staff")
+])
+async def view_reviews(interaction: discord.Interaction, 対象: str, 星の数: int):
+    if not (1 <= 星の数 <= 5):
+        return await interaction.response.send_message("星は1〜5の間で指定してください。", ephemeral=True)
+
+    await interaction.response.defer()
+    log_ch = bot.get_channel(LOG_CHANNEL_ID)
+    if not log_ch:
+        return await interaction.followup.send("ログチャンネルが見つかりません。")
+
+    found_reviews = []
+    target_stars = "⭐" * 星の数
+    # タイトルの検索ワードを設定
+    target_title_part = "サーバー" if 対象 == "server" else "スタッフ"
+
+    async for msg in log_ch.history(limit=1000):
+        if not msg.embeds:
+            continue
+        
+        emb = msg.embeds[0]
+        
+        # エラー防止：タイトルがない、または「新着レビュー」ではない場合は飛ばす
+        if not emb.title or "新着レビュー" not in emb.title:
+            continue
+
+        # 対象（サーバー/スタッフ）と星の数が一致するかチェック
+        if target_title_part in emb.title:
+            if len(emb.fields) >= 1 and emb.fields[0].value == target_stars:
+                reviewer = "不明"
+                if len(emb.fields) >= 2:
+                    reviewer = emb.fields[1].value
+                
+                comment = emb.fields[-1].value if emb.fields else "コメントなし"
+                found_reviews.append(f"👤 {reviewer}\n{target_stars}\n💬 {comment}")
+                
+                if len(found_reviews) >= 5:
+                    break
+
+    if not found_reviews:
+        return await interaction.followup.send(f"指定された条件（{target_title_part} / {星の数}つ星）のレビューは見つかりませんでした。")
+
+    result_text = f"🔍 **{target_title_part}の評価検索結果（星{星の数}）**\n\n" + "\n\n---\n\n".join(found_reviews)
+    
+    if len(result_text) > 2000:
+        result_text = result_text[:1990] + "..."
+
+    await interaction.followup.send(result_text)
+
+# --- この下に bot.run(TOKEN) が来るようにする ---
 bot.run(TOKEN)
