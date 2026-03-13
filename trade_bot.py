@@ -396,5 +396,33 @@ class TicketLaunchView(discord.ui.View):
     async def make_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         # ボタンを押すとフォームが開く
         await interaction.response.send_modal(TicketSetupModal())
+async def setup_hook(self):
+        # 再起動してもボタンが動くように登録
+        self.add_view(TicketLaunchView())
+        
+        # スラッシュコマンドの同期（既存の処理）
+        guild = discord.Object(id=GUILD_ID)
+        self.tree.copy_global_to(guild=guild)
+        await self.tree.sync(guild=guild)
+
+    async def on_ready(self):
+        print(f'✅ {self.user} 起動完了')
+        
+        # 指定チャンネルにパネルを自動設置
+        channel = self.get_channel(1479271510995636476)
+        if channel:
+            already_posted = False
+            async for message in channel.history(limit=10):
+                if message.author == self.user and message.embeds and "仲介チケット発行" in message.embeds[0].title:
+                    already_posted = True
+                    break
+            
+            if not already_posted:
+                embed = discord.Embed(
+                    title="🎫 仲介チケット発行",
+                    description="下のボタンから詳細を入力してチケットを作成してください。\n自動で取引相手が招待されます。",
+                    color=0x2ecc71
+                )
+                await channel.send(embed=embed, view=TicketLaunchView())
 
 bot.run(TOKEN)
