@@ -101,17 +101,33 @@ class ReviewModal(discord.ui.Modal):
 
 # --- 4. 終了・ログ保存View ---
 class FinishView(discord.ui.View):
-    def __init__(self, staff_id):
+    def __init__(self, staff_id=None): # Noneを受け取れるように
         super().__init__(timeout=None)
         self.staff_id = staff_id
 
-    @discord.ui.button(label="成功 ✅", style=discord.ButtonStyle.success)
+    # 【修正ポイント】 custom_id="finish_success" を追加
+    @discord.ui.button(label="成功 ✅", style=discord.ButtonStyle.success, custom_id="finish_success")
     async def success(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # もしstaff_idがNoneなら、トピックから取得を試みる（永続化のため）
+        if self.staff_id is None:
+            self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
         await self.process_record(interaction, "成功")
 
-    @discord.ui.button(label="失敗 ❌", style=discord.ButtonStyle.danger)
+    # 【修正ポイント】 custom_id="finish_fail" を追加
+    @discord.ui.button(label="失敗 ❌", style=discord.ButtonStyle.danger, custom_id="finish_fail")
     async def fail(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.staff_id is None:
+            self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
         await self.process_record(interaction, "失敗")
+
+    def get_staff_id_from_topic(self, topic):
+        """チャンネルトピックから依頼者のIDを抽出する補助関数"""
+        if not topic: return None
+        match = re.search(r'依頼者:(\d+)', topic)
+        return int(match.group(1)) if match else None
+
+    async def process_record(self, interaction, result):
+        # ... (以下、前のコードと同じ) ...
 
     async def process_record(self, interaction, result):
         await interaction.response.defer()
