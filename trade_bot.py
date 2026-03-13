@@ -23,7 +23,14 @@ class MyBot(commands.Bot):
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
         # Supabaseへ接続
-        self.conn = psycopg2.connect(DB_URL)
+        # URLを使わず、情報を一つずつ直接指定して接続します
+        self.conn = psycopg2.connect(
+            host="aws-0-ap-southeast-2.pooler.supabase.com",
+            port=6543,
+            database="postgres",
+            user="postgres.tvgctvjmtkvbqmkgyhot",
+            password="Aeyvnl123Aeyvnl12"
+        )
         self.cursor = self.conn.cursor()
         self.init_db()
 
