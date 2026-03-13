@@ -405,7 +405,7 @@ async def setup_hook(self):
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
 
-    async def on_ready(self):
+async def on_ready(self):
         print(f'✅ {self.user} 起動完了')
         
         # 指定チャンネルにパネルを自動設置
