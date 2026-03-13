@@ -396,16 +396,23 @@ class TicketLaunchView(discord.ui.View):
     async def make_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         # ボタンを押すとフォームが開く
         await interaction.response.send_modal(TicketSetupModal())
-async def setup_hook(self):
+
+# --- Botクラス本体（ここから配置を修正しました） ---
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
         # 再起動してもボタンが動くように登録
         self.add_view(TicketLaunchView())
         
-        # スラッシュコマンドの同期（既存の処理）
+        # スラッシュコマンドの同期
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
 
-async def on_ready(self):
+    async def on_ready(self):
         print(f'✅ {self.user} 起動完了')
         
         # 指定チャンネルにパネルを自動設置
@@ -424,5 +431,8 @@ async def on_ready(self):
                     color=0x2ecc71
                 )
                 await channel.send(embed=embed, view=TicketLaunchView())
+
+# インスタンス作成
+bot = MyBot()
 
 bot.run(TOKEN)
