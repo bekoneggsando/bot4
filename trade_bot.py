@@ -22,15 +22,22 @@ class MyBot(commands.Bot):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
+    # 🚨 ここ！ 「a」の位置が上の「def __init__」と縦に揃っている必要があります
     async def setup_hook(self):
+        # 永続ボタンの登録
+        self.add_view(TicketLaunchView())
+        self.add_view(FinishView(None)) # 必要に応じて追加
+        
+        # スラッシュコマンドをDiscordサーバーに送信（同期）する
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
-        self.update_panel.start()
+        print("✅ コマンドの同期が完了しました")
 
+    # 🚨 ここも！ 位置を揃えてください
     async def on_ready(self):
-        print(f'✅ ログイン完了: {self.user}')
-
+        print(f'✅ {self.user} 起動完了')
+        # ...パネル投稿処理...
     @tasks.loop(minutes=5)
     async def update_panel(self):
         """統計パネル更新ロジック（LOG_CHANNELから集計）"""
