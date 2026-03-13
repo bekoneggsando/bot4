@@ -29,7 +29,7 @@ class MyBot(commands.Bot):
             port=6543,
             database="postgres",
             user="postgres.tvgctvjmtkvbqmkgyhot",
-            password="Aeyvnl123Aeyvnl12"
+            password="Aeyvnl123Aeyvnl12",
             sslmode="require"
         )
         self.cursor = self.conn.cursor()
