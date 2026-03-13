@@ -337,5 +337,69 @@ async def profile(interaction: discord.Interaction, user: discord.Member):
         embed.set_thumbnail(url=user.avatar.url)
 
     await interaction.followup.send(embed=embed)
+import discord
+from discord import app_commands
+
+# --- 取引相手を入力させるフォーム ---
+class TicketSetupModal(discord.ui.Modal, title="仲介チケットの作成"):
+    # 取引相手のIDを入力してもらう（名前よりIDの方が確実です）
+    target_id = discord.ui.TextInput(
+        label="取引相手のユーザーIDを入力してください",
+        placeholder="例: 123456789012345678",
+        min_length=17,
+        max_length=20,
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        user = interaction.user
+        
+        # 入力されたIDからユーザーを探す
+        try:
+            target_user = await guild.fetch_member(int(self.target_id.value))
+        except:
+            return await interaction.response.send_message("❌ 指定されたユーザーIDが見つかりません。正しいIDを入力してください。", ephemeral=True)
+
+        if target_user.bot:
+            return await interaction.response.send_message("❌ ボットを取引相手に指定することはできません。", ephemeral=True)
+
+        # 権限設定（本人・相手・スタッフ・Botのみ）
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False), # 全員非表示
+            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True), # 依頼者
+            target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True), # 取引相手
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True) # Bot
+        }
+        
+        # 仲介スタッフロールがあれば追加（任意）
+        # staff_role = guild.get_role(スタッフロールID)
+        # if staff_role: overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+
+        # チャンネル作成
+        channel = await guild.create_text_channel(
+            name=f"仲介-{user.name}×{target_user.name}",
+            overwrites=overwrites,
+            topic=f"依頼者: {user.id} | 相手: {target_user.id} | 終了時は /finish"
+        )
+
+        await interaction.response.send_message(f"✅ チケットを作成しました: {channel.mention}", ephemeral=True)
+        
+        embed = discord.Embed(
+            title="🤝 仲介チケットが作成されました",
+            description=f"{user.mention} 様と {target_user.mention} 様の取引チャンネルです。\n\nスタッフが参りますので、取引内容を記載してお待ちください。\n\n**【スタッフの方へ】**\n完了したら `/finish` を実行してください。",
+            color=0x3498db
+        )
+        await channel.send(content=f"{user.mention} {target_user.mention} 様", embed=embed)
+
+# --- パネルのボタン設定 ---
+class TicketLaunchView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="📩 仲介を依頼する", style=discord.ButtonStyle.primary, custom_id="make_ticket_btn")
+    async def make_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # ボタンを押したらフォームを表示
+        await interaction.response.send_modal(TicketSetupModal())
 
 bot.run(TOKEN)
