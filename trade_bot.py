@@ -278,4 +278,30 @@ async def search_log(interaction: discord.Interaction, 検索ワード: str):
 
     result_embed = discord.Embed(title=f"🔍 検索結果: {検索ワード}", description="\n\n".join(found_logs), color=discord.Color.blue())
     await interaction.followup.send(embed=result_embed)
+
+@bot.event
+async def on_message(message):
+    # Bot自身のメッセージは無視
+    if message.author.bot:
+        return
+
+    # チャンネル名が「🤝仲介-」で始まり、かつ画像がある場合のみ実行
+    if message.channel.name.startswith("🤝仲介-") and message.attachments:
+        log_ch = bot.get_channel(LOG_CHANNEL_ID)
+        if log_ch:
+            for attachment in message.attachments:
+                # 画像形式（jpg, png, gif, webp）かチェック
+                if any(attachment.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
+                    embed = discord.Embed(
+                        title=f"📸 画像ログ: {message.channel.name}",
+                        description=f"送信者: {message.author.mention}\n[メッセージへ移動]({message.jump_url})",
+                        color=0x3498db,
+                        timestamp=message.created_at
+                    )
+                    embed.set_image(url=attachment.url)
+                    await log_ch.send(embed=embed)
+
+    # これを忘れると他のコマンド（/finishなど）が動かなくなるので必須
+    await bot.process_commands(message)
+
 bot.run(TOKEN)
