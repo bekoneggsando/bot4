@@ -131,10 +131,20 @@ class FinishView(discord.ui.View):
         await interaction.response.defer()
         log_ch = interaction.client.get_channel(LOG_CHANNEL_ID)
         
-        # --- 会話ログ作成 ---
-        log_data = f"取引ログ: {interaction.channel.name}\n結果: {result}\nスタッフID: {self.staff_id}\n\n"
+       # --- 会話ログ作成 ---
+        log_data = f"取引ID: {trade_id}\n取引ログ: {interaction.channel.name}\n結果: {result}\nスタッフID: {self.staff_id}\n\n"
+        
         async for m in interaction.channel.history(limit=1000, oldest_first=True):
+            # メッセージ内容を書き込む
             log_data += f"[{m.created_at.strftime('%Y-%m-%d %H:%M')}] {m.author}: {m.content}\n"
+            
+            # --- ここから追加：画像があればURLを追記する ---
+            if m.attachments:
+                for attachment in m.attachments:
+                    log_data += f"   📎 添付ファイルURL: {attachment.url}\n"
+            # ------------------------------------------
+        
+        # この後、log_file = discord.File(...) と続くはずです
         
         log_file = discord.File(fp=io.BytesIO(log_data.encode()), filename=f"log-{interaction.channel.name}.txt")
 
