@@ -101,19 +101,16 @@ class ReviewModal(discord.ui.Modal):
 
 # --- 4. 終了・ログ保存View ---
 class FinishView(discord.ui.View):
-    def __init__(self, staff_id=None): # Noneを受け取れるように
+    def __init__(self, staff_id=None): 
         super().__init__(timeout=None)
         self.staff_id = staff_id
 
-    # 【修正ポイント】 custom_id="finish_success" を追加
     @discord.ui.button(label="成功 ✅", style=discord.ButtonStyle.success, custom_id="finish_success")
     async def success(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # もしstaff_idがNoneなら、トピックから取得を試みる（永続化のため）
         if self.staff_id is None:
             self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
         await self.process_record(interaction, "成功")
 
-    # 【修正ポイント】 custom_id="finish_fail" を追加
     @discord.ui.button(label="失敗 ❌", style=discord.ButtonStyle.danger, custom_id="finish_fail")
     async def fail(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.staff_id is None:
@@ -121,13 +118,10 @@ class FinishView(discord.ui.View):
         await self.process_record(interaction, "失敗")
 
     def get_staff_id_from_topic(self, topic):
-        """チャンネルトピックから依頼者のIDを抽出する補助関数"""
-        if not topic: return None
+        if not topic:
+            return None
         match = re.search(r'依頼者:(\d+)', topic)
         return int(match.group(1)) if match else None
-
-    async def process_record(self, interaction, result):
-        # ... (以下、前のコードと同じ) ...
 
     async def process_record(self, interaction, result):
         await interaction.response.defer()
@@ -141,10 +135,16 @@ class FinishView(discord.ui.View):
         log_file = discord.File(fp=io.BytesIO(log_data.encode()), filename=f"log-{interaction.channel.name}.txt")
 
         # 完了記録送信
-        embed = discord.Embed(title="🤝 取引完了記録", description=f"{'✅' if result=='成功' else '❌'} 取引結果: **{result}**", color=0x2ecc71 if result=="成功" else 0xe74c3c)
+        embed = discord.Embed(
+            title="🤝 取引完了記録", 
+            description=f"{'✅' if result=='成功' else '❌'} 取引結果: **{result}**", 
+            color=0x2ecc71 if result=="成功" else 0xe74c3c
+        )
         embed.add_field(name="担当スタッフ", value=interaction.user.mention)
         embed.set_footer(text=f"Staff_ID: {self.staff_id}")
-        await log_ch.send(embed=embed, file=log_file)
+        
+        if log_ch:
+            await log_ch.send(embed=embed, file=log_file)
         
         await interaction.followup.send(f"記録しました: {result}")
         
@@ -152,9 +152,14 @@ class FinishView(discord.ui.View):
             view = discord.ui.View()
             b1 = discord.ui.Button(label="サーバーをレビュー", style=discord.ButtonStyle.primary)
             b2 = discord.ui.Button(label="スタッフをレビュー", style=discord.ButtonStyle.secondary)
-            b1.callback = lambda i: i.response.send_modal(ReviewModal(self.staff_id, "server"))
-            b2.callback = lambda i: i.response.send_modal(ReviewModal(self.staff_id, "staff"))
-            view.add_item(b1); view.add_item(b2)
+            
+            async def cb1(i): await i.response.send_modal(ReviewModal(self.staff_id, "server"))
+            async def cb2(i): await i.response.send_modal(ReviewModal(self.staff_id, "staff"))
+            
+            b1.callback = cb1
+            b2.callback = cb2
+            view.add_item(b1)
+            view.add_item(b2)
             await interaction.followup.send("評価をお願いします！", view=view)
 
 # --- 5. Bot本体 ---
