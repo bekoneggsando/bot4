@@ -185,54 +185,7 @@ bot = MyBot()
 async def finish(interaction: discord.Interaction):
     await interaction.response.send_message("結果を選択：", view=FinishView(interaction.user.id))
 
-@bot.tree.command(name="profile", description="スタッフ実績を表示")
-async def profile(interaction: discord.Interaction, user: discord.Member):
-    await interaction.response.defer()
-    log_ch = bot.get_channel(LOG_CHANNEL_ID)
-    if not log_ch:
-        return await interaction.followup.send("ログチャンネルが見つかりません。")
 
-    total, success, stars = 0, 0, []
-    
-    async for msg in log_ch.history(limit=1000):
-        if not msg.embeds:
-            continue
-        
-        emb = msg.embeds[0]
-        
-        # --- 🛡️ エラー防止のガードレール ---
-        # タイトルがない、またはフッターがないメッセージはスキップ
-        if not emb.title or not emb.footer or not emb.footer.text:
-            continue
-        # ----------------------------------
-
-        # 取引完了記録の集計
-        if "取引完了記録" in emb.title and str(user.id) in emb.footer.text:
-            total += 1
-            # 説明文（description）もNoneチェック
-            desc = emb.description or ""
-            if "✅" in desc:
-                success += 1
-        
-        # レビューの集計
-        elif "レビュー" in emb.title:
-            # フィールドが2つ以上あるか、かつ対象スタッフのIDが含まれているか
-            if len(emb.fields) >= 2 and str(user.id) in emb.fields[1].value:
-                # 星評価（⭐の数）を取得
-                star_val = emb.fields[0].value or ""
-                stars.append(len(star_val))
-    
-    # 統計の計算
-    avg = sum(stars) / len(stars) if stars else 0
-    # スコア計算（log1pは0を防ぐための関数）
-    score = avg * math.log1p(len(stars)) * math.log1p(total)
-    
-    embed = discord.Embed(title=f"👤 プロフィール: {user.display_name}", color=discord.Color.green())
-    embed.add_field(name="取引数", value=f"{total}回 (成功 {success})", inline=True)
-    embed.add_field(name="平均評価", value=f"★{avg:.1f} ({len(stars)}件)", inline=True)
-    embed.add_field(name="信頼スコア", value=f"{score:.1f}", inline=True)
-    
-    await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="view_reviews", description="指定した星の数の評価を表示します")
 @app_commands.choices(対象=[
