@@ -40,26 +40,55 @@ class MyBot(commands.Bot):
 
         stats = {"total": 0, "success": 0, "fail": 0, "staff": {}}
         async for msg in log_ch.history(limit=1000):
+            # 埋め込みメッセージがない場合は飛ばす
             if not msg.embeds: continue
+            
             emb = msg.embeds[0]
+            
+            # --- 🛡️ ここが修正の核心！ ---
+            # タイトルがない（None）メッセージを無視するようにします
+            if not emb.title: 
+                continue 
+            # ---------------------------
+
             if "取引完了記録" in emb.title:
                 stats["total"] += 1
-                res = "成功" if "✅" in emb.description else "失敗"
+                # 説明文（description）も空の場合に備えて安全に処理
+                desc = emb.description or ""
+                res = "成功" if "✅" in desc else "失敗"
+                
                 if res == "成功": stats["success"] += 1
                 else: stats["fail"] += 1
                 
                 try:
-                    s_id = int(emb.footer.text.replace("Staff_ID: ", ""))
-                    if s_id not in stats["staff"]:
-                        stats["staff"][s_id] = {"total": 0, "stars": [], "name": emb.fields[0].value}
-                    stats["staff"][s_id]["total"] += 1
-                except: continue
+                    # フッターやフィールドのデータも空でないか確認しながら取得
+                    footer_text = emb.footer.text if emb.footer else ""
+                    s_id_str = footer_text.replace("Staff_ID: ", "")
+                    if s_id_str.isdigit():
+                        s_id = int(s_id_str)
+                        if s_id not in stats["staff"]:
+                            # フィールド[0]がない場合も考慮
+                            s_name = emb.fields[0].value if emb.fields else "不明なスタッフ"
+                            stats["staff"][s_id] = {"total": 0, "stars": [], "name": s_name}
+                        stats["staff"][s_id]["total"] += 1
+                except Exception as e:
+                    print(f"集計スキップ: {e}")
+                    continue
+            
             elif "新着レビュー" in emb.title:
                 try:
-                    s_id = int(re.search(r'\d+', emb.fields[1].value).group())
-                    stars = len(emb.fields[0].value)
-                    if s_id in stats["staff"]: stats["staff"][s_id]["stars"].append(stars)
-                except: continue
+                    # フィールドが足りない場合に備えてチェック
+                    if len(emb.fields) >= 2:
+                        s_id_match = re.search(r'\d+', emb.fields[1].value)
+                        if s_id_match:
+                            s_id = int(s_id_match.group())
+                            stars = len(emb.fields[0].value)
+                            if s_id in stats["staff"]:
+                                stats["staff"][s_id]["stars"].append(stars)
+                except:
+                    continue
+
+        # --- (この下にパネルを作成して送信するコードが続きます) ---
 
         embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
         embed.add_field(name="取引総数", value=f"{stats['total']}件", inline=True)
