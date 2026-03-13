@@ -263,55 +263,62 @@ async def profile(interaction: discord.Interaction, user: discord.Member):
     log_ch = bot.get_channel(LOG_CHANNEL_ID)
     
     if not log_ch:
-        return await interaction.followup.send("⚠️ ログチャンネルが設定されていないか、見つかりません。")
+        return await interaction.followup.send("⚠️ ログチャンネルが見つかりません。")
 
     total, success, stars = 0, 0, []
     recent_comments = []
     
-    # 直近1000件のログをスキャン
     async for msg in log_ch.history(limit=1000):
         if not msg.embeds:
             continue
         
         emb = msg.embeds[0]
-        
-        # エラー防止：タイトルやフッターがない場合はスキップ
-        if not emb.title or not emb.footer or not emb.footer.text:
+        if not emb.title:
             continue
 
-        # 1. 取引実績の集計 (タイトルに「取引完了記録」が含まれ、フッターにスタッフIDがある)
-        if "取引完了記録" in emb.title and str(user.id) in emb.footer.text:
+        # 1. 取引実績の集計
+        # フッターまたはタイトルからスタッフIDを判定
+        staff_id_str = str(user.id)
+        is_staff_msg = False
+        if emb.footer and emb.footer.text and staff_id_str in emb.footer.text:
+            is_staff_msg = True
+
+        if "取引完了記録" in emb.title and is_staff_msg:
             total += 1
             desc = emb.description or ""
             if "✅" in desc:
                 success += 1
         
-        # 2. スタッフレビューの集計 (タイトルに「スタッフ」と「レビュー/評価」が含まれる)
-        elif "スタッフ" in emb.title and ("レビュー" in emb.title or "評価" in emb.title):
-            # フィールド[1]に対象スタッフのIDが含まれているか
-            if len(emb.fields) >= 2 and str(user.id) in emb.fields[1].value:
-                # 星評価を取得
-                star_val = emb.fields[0].value or ""
-                stars.append(len(star_val))
-                
-                # 最新3件のコメントを保存
-                if len(recent_comments) < 3:
-                    # コメントはフィールド[2]またはdescriptionから取得
-                    comment = "なし"
-                    if len(emb.fields) >= 3:
-                        comment = emb.fields[2].value
-                    elif emb.description:
-                        comment = emb.description
-                    
-                    recent_comments.append(f"{star_val} 「{comment}」")
+        # 2. レビューの集計（ここを強化）
+        # タイトルに「レビュー」または「評価」が含まれているか
+        elif ("レビュー" in emb.title or "評価" in emb.title):
+            # フィールドを全スキャンして、スタッフのメンションまたはIDが含まれているか探す
+            is_target_review = False
+            for field in emb.fields:
+                if staff_id_str in field.value:
+                    is_target_review = True
+                    break
+            
+            if is_target_review:
+                # 星評価を取得（1つ目のフィールドが⭐である前提）
+                if len(emb.fields) >= 1:
+                    star_val = emb.fields[0].value or ""
+                    # ⭐の数をカウント（絵文字が含まれているか）
+                    star_count = star_val.count("⭐")
+                    if star_count > 0:
+                        stars.append(star_count)
+                        
+                        # 最新3件のコメントを保存
+                        if len(recent_comments) < 3:
+                            # 最後のフィールドをコメントとみなす
+                            comment = emb.fields[-1].value if len(emb.fields) > 1 else "なし"
+                            recent_comments.append(f"{'⭐' * star_count} 「{comment}」")
 
     # 統計計算
     avg_stars = sum(stars) / len(stars) if stars else 0
-    # 信頼スコア計算 (対数を使って実績が多いほど加点)
     trust_score = avg_stars * math.log1p(len(stars)) * math.log1p(total)
     success_rate = (success / total * 100) if total > 0 else 0
 
-    # プロフィールEmbed作成
     embed = discord.Embed(
         title=f"👤 スタッフプロフィール: {user.display_name}",
         color=discord.Color.green(),
@@ -322,12 +329,10 @@ async def profile(interaction: discord.Interaction, user: discord.Member):
     embed.add_field(name="⭐ 平均評価", value=f"**★{avg_stars:.1f}**\n({len(stars)}件のレビュー)", inline=True)
     embed.add_field(name="💎 信頼スコア", value=f"**{trust_score:.1f}**", inline=True)
     
-    # レビューコメント欄
     review_display = "\n".join(recent_comments) if recent_comments else "レビューはまだありません。"
     embed.add_field(name="💬 最近のレビューコメント", value=review_display, inline=False)
     
     embed.set_footer(text=f"仲介成功率: {success_rate:.1f}%")
-    
     if user.avatar:
         embed.set_thumbnail(url=user.avatar.url)
 
