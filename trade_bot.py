@@ -187,12 +187,12 @@ async def finish(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="view_reviews", description="指定した星の数の評価を表示します")
+@bot.tree.command(name="view_reviews", description="評価を検索して表示します")
 @app_commands.choices(対象=[
     app_commands.Choice(name="サーバー評価", value="server"),
     app_commands.Choice(name="スタッフ評価", value="staff")
 ])
-async def view_reviews(interaction: discord.Interaction, 対象: str, 星の数: int):
+async def view_reviews(interaction: discord.Interaction, 対象: str, 星の数: int, スタッフ: discord.Member = None):
     if not (1 <= 星の数 <= 5):
         return await interaction.response.send_message("星は1〜5の間で指定してください。", ephemeral=True)
 
@@ -203,8 +203,8 @@ async def view_reviews(interaction: discord.Interaction, 対象: str, 星の数:
 
     found_reviews = []
     target_stars = "⭐" * 星の数
-    # タイトルの検索ワードを設定
-    target_title_part = "サーバー" if 対象 == "server" else "スタッフ"
+    # タイトルのキーワード設定
+    target_keyword = "サーバー" if 対象 == "server" else "スタッフ"
 
     async for msg in log_ch.history(limit=1000):
         if not msg.embeds:
@@ -212,27 +212,43 @@ async def view_reviews(interaction: discord.Interaction, 対象: str, 星の数:
         
         emb = msg.embeds[0]
         
-        # エラー防止：タイトルがない、または「新着レビュー」ではない場合は飛ばす
-        if not emb.title or "新着レビュー" not in emb.title:
+        # 🛡️ エラー防止：タイトルがない場合は飛ばす
+        if not emb.title:
             continue
 
-        # 対象（サーバー/スタッフ）と星の数が一致するかチェック
-        if target_title_part in emb.title:
-            if len(emb.fields) >= 1 and emb.fields[0].value == target_stars:
+        # 1. 「レビュー」または「評価」という文字が含まれ、かつ「対象（サーバー/スタッフ）」が含まれるか
+        if ("レビュー" in emb.title or "評価" in emb.title) and target_keyword in emb.title:
+            
+            # 2. 星の数が一致するか
+            if len(emb.fields) >= 1 and target_stars in emb.fields[0].value:
+                
+                # 3. スタッフ指定がある場合、そのスタッフのIDが含まれているか
+                if 対象 == "staff" and スタッフ:
+                    # フィールド[1]に対象スタッフのメンションまたはIDがあるかチェック
+                    if len(emb.fields) >= 2 and str(スタッフ.id) not in emb.fields[1].value:
+                        continue # 指定スタッフと違う場合はスキップ
+
+                # 表示用データの抽出
                 reviewer = "不明"
                 if len(emb.fields) >= 2:
                     reviewer = emb.fields[1].value
                 
-                comment = emb.fields[-1].value if emb.fields else "コメントなし"
-                found_reviews.append(f"👤 {reviewer}\n{target_stars}\n💬 {comment}")
+                comment = "コメントなし"
+                if len(emb.fields) >= 3:
+                    comment = emb.fields[2].value
+                elif emb.description: # フィールドにない場合descriptionを探す
+                    comment = emb.description
+
+                found_reviews.append(f"👤 **投稿者**: {reviewer}\n**評価**: {target_stars}\n💬 **内容**: {comment}")
                 
-                if len(found_reviews) >= 5:
+                if len(found_reviews) >= 5: # 最大5件
                     break
 
     if not found_reviews:
-        return await interaction.followup.send(f"指定された条件（{target_title_part} / {星の数}つ星）のレビューは見つかりませんでした。")
+        staff_name = f" ({スタッフ.display_name})" if スタッフ else ""
+        return await interaction.followup.send(f"条件に合う{target_keyword}評価{staff_name}は見つかりませんでした。")
 
-    result_text = f"🔍 **{target_title_part}の評価検索結果（星{星の数}）**\n\n" + "\n\n---\n\n".join(found_reviews)
+    result_text = f"🔍 **{target_keyword}の評価検索結果（星{星の数}）**\n\n" + "\n\n---\n\n".join(found_reviews)
     
     if len(result_text) > 2000:
         result_text = result_text[:1990] + "..."
