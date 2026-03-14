@@ -381,6 +381,31 @@ async def close(interaction: discord.Interaction):
 # ==========================================
 @bot.tree.command(name="send_staff_recruit", description="指定のチャンネルにスタッフ募集パネルを送信します")
 async def send_staff_recruit(interaction: discord.Interaction):
-    # ... (内容はそのまま)
+    target_ch_id = 1478995230979260486
+    channel = bot.get_channel(target_ch_id)
+    
+    if not channel:
+        return await interaction.response.send_message("❌ 指定されたチャンネルが見つかりませんでした。", ephemeral=True)
+
+    embed = discord.Embed(title="📢 仲介スタッフ募集", color=discord.Color.gold())
+    embed.description = (
+        "当サーバーでは、サーバーの規模拡大に伴い **仲介スタッフ** を募集しています。\n\n"
+        "**🛠 仕事内容**\n"
+        "・ユーザー同士の取引の仲介\n"
+        "・取引内容の確認\n"
+        "・支払い・商品の受け渡し確認\n"
+        "・取引トラブルの対応\n\n"
+        "**✅ 応募条件**\n"
+        "・サーバールールを守れる方\n"
+        "・責任を持って仲介を行える方\n"
+        "・Discordを頻繁に確認できる方\n"
+        "・信頼できると判断された方\n\n"
+        "※詐欺防止のため **面接・審査** があります"
+    )
+    
+    await channel.send(embed=embed, view=StaffRecruitView())
+    await interaction.response.send_message(f"✅ {channel.mention} に募集パネルを送信しました。", ephemeral=True)
+
+# ここは必ず左端（スペースなし）にする
 
 bot.run(TOKEN)
