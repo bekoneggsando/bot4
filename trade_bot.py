@@ -223,6 +223,7 @@ class MyBot(commands.Bot):
     async def setup_hook(self):
         self.add_view(TicketLaunchView())
         self.add_view(FinishView(None))
+        self.add_view(StaffRecruitView()) # ←これを必ず追加！
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
