@@ -78,7 +78,7 @@ class StaffApplyModal(discord.ui.Modal, title="仲介スタッフ応募フォー
 
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
-        ADMIN_ROLE_ID = 1479125489506586735 # 運営ロールID
+        ADMIN_ROLE_ID = 1478964284955426888 # 運営ロールID
         
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
