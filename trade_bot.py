@@ -320,4 +320,15 @@ async def on_message(message):
     # これを忘れると他のコマンド（/finishなど）が動かなくなるので必須
     await bot.process_commands(message)
 
+@bot.tree.command(name="close", description="【スタッフ専用】チケットを閉じます（ログ保存後に使用）")
+async def close(interaction: discord.Interaction):
+    # スタッフロールを持っているか、管理者権限があるかチェック
+    STAFF_ROLE_ID = 1479125489506586735 
+    if not any(role.id == STAFF_ROLE_ID for role in interaction.user.roles) and not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ このコマンドはスタッフのみ実行できます。", ephemeral=True)
+
+    await interaction.response.send_message("このチャンネルを5秒後に削除します。ログの保存は忘れましたか？")
+    await asyncio.sleep(5)
+    await interaction.channel.delete()
+
 bot.run(TOKEN)
