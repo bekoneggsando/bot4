@@ -171,6 +171,32 @@ class FinishView(discord.ui.View):
             self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
         await self.process_record(interaction, "失敗")
 
+    async def update_rank(self, member, count):
+        # どのランクに該当するかチェック
+        new_role_id = None
+        for threshold in sorted(RANK_ROLES.keys(), reverse=True):
+            if count >= threshold:
+                new_role_id = RANK_ROLES[threshold]
+                break
+        
+        if not new_role_id:
+            return None
+
+        new_role = member.guild.get_role(new_role_id)
+        if new_role and new_role not in member.roles:
+            # 【重複防止】現在の称号リストに含まれる古い役職をすべて特定して外す
+            roles_to_remove = [member.guild.get_role(rid) for rid in RANK_ROLES.values() 
+                               if member.guild.get_role(rid) in member.roles]
+            if roles_to_remove:
+                await member.remove_roles(*roles_to_remove)
+            
+            # 新しい役職を付与
+            await member.add_roles(new_role)
+            return new_role.name
+        return None
+
+
+    
     def get_staff_id_from_topic(self, topic):
         if not topic:
             return None
