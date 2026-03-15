@@ -408,4 +408,29 @@ async def send_staff_recruit(interaction: discord.Interaction):
 
 # ここは必ず左端（スペースなし）にする
 
+import json
+
+ACHIEVEMENTS_FILE = "achievements.json"
+
+# 称号ランクの役職ID（★ここを自分のサーバーのIDに書き換えてください）
+RANK_ROLES = {
+    5: 147900000000000001,   # ルーキー（5回〜）
+    10: 147900000000000002,  # 公認（10回〜）
+    30: 147900000000000003,  # ベテラン（30回〜）
+    100: 147900000000000004  # 伝説（100回〜）
+}
+
+def add_achievement(user_id):
+    data = {}
+    if os.path.exists(ACHIEVEMENTS_FILE):
+        with open(ACHIEVEMENTS_FILE, "r") as f:
+            data = json.load(f)
+    
+    user_id_str = str(user_id)
+    data[user_id_str] = data.get(user_id_str, 0) + 1
+    
+    with open(ACHIEVEMENTS_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+    return data[user_id_str]
+
 bot.run(TOKEN)
