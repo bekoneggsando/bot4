@@ -164,6 +164,21 @@ class FinishView(discord.ui.View):
         if self.staff_id is None:
             self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
         await self.process_record(interaction, "成功")
+        # 1. 実績を1増やす
+        count = add_achievement(interaction.user.id)
+        
+        # 2. ランクアップ判定（役職の付け替え）
+        rank_name = await self.update_rank(interaction.user, count)
+
+        # 3. ログ保存のメイン処理（元からあるやつ）を動かす
+        await self.process_record(interaction, "成功")
+
+        # 4. お祝いメッセージを画面に出す
+        msg = f"✅ 取引成功！累計実績が **{count}回** になりました。"
+        if rank_name:
+            msg += f"\n🎉 **昇格おめでとうございます！** あなたは新たに【**{rank_name}**】の称号を手にしました！"
+        
+        await interaction.followup.send(msg)
 
     @discord.ui.button(label="失敗 ❌", style=discord.ButtonStyle.danger, custom_id="finish_fail")
     async def fail(self, interaction: discord.Interaction, button: discord.ui.Button):
