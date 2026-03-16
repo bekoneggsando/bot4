@@ -220,6 +220,13 @@ class FinishView(discord.ui.View):
 
     async def process_record(self, interaction, result):
         await interaction.response.defer()
+        # ★ここを追記！ 今の日時を使ってIDを作成する
+        trade_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        
+        # これで、下の log_data の中で trade_id が使えるようになります
+        log_data = f"取引ID: {trade_id}\n取引ログ: {interaction.channel.name}\n結果: {result}\nスタッフID: {self.staff_id}\n\n"
+        
+        # ...残りの処理...
         log_ch = interaction.client.get_channel(LOG_CHANNEL_ID)
         
        # --- 会話ログ作成 ---
