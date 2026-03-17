@@ -670,19 +670,16 @@ class InternalBuyView(discord.ui.View):
         )
 
 # ここを bot.tree に変える
-@bot.tree.command(name="sell", description="アカウントの販売募集パネルを作成します")
-async def sell(interaction: discord.Interaction):
-    # (中身はそのまま)
-    await interaction.response.send_modal(SellModal())
+@bot.tree.command(name="sell", description="ゲーム名を選んで出品します")
+async def sell(interaction: discord.Interaction, game_name: str):
+    # 【ここを修正！】カッコの中に game_name を入れる
+    await interaction.response.send_modal(SellModal(game_name=game_name))
 
 @bot.event
 async def on_ready():
     # bot.tree を同期する
     await bot.tree.sync()
     print(f"✅ {bot.user} 起動 & コマンド同期完了")
-
-
-
 
 bot.run(TOKEN)
 
