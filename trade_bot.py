@@ -620,7 +620,6 @@ class InternalBuyView(discord.ui.View):
         await ticket_channel.send(
             content=f"{self.seller.mention} {buyer.mention} {staff_role.mention if staff_role else ''}",
             embed=info_embed, 
-            view=FinishView() 
         )
 
 # ここを bot.tree に変える
