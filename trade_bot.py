@@ -343,7 +343,7 @@ class MyBot(commands.Bot):
     # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
 MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
 
-@tasks.loop(minutes=5)
+    @tasks.loop(minutes=5)
     async def update_panel(self):
         channel = self.get_channel(PANEL_CH_ID)
         log_ch = self.get_channel(LOG_CHANNEL_ID)
@@ -365,6 +365,7 @@ MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
                 except: continue
             elif "新着レビュー" in emb.title:
                 try:
+                    import re
                     s_id = int(re.search(r'\d+', emb.fields[1].value).group())
                     if s_id in stats["staff"]: 
                         stats["staff"][s_id]["stars"].append(len(emb.fields[0].value))
