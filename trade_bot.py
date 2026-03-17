@@ -536,8 +536,8 @@ import discord
 from discord import app_commands
 
 # --- 設定：スタッフ役職のIDを入れてください ---
-STAFF_ROLE_ID = 123456789012345678  # 仲介スタッフの役職ID
-TICKET_CATEGORY_ID = None           # チケットを作るカテゴリーID（任意）
+STAFF_ROLE_ID = 1478964390530121964  # 仲介スタッフの役職ID
+TICKET_CATEGORY_ID = 1483362870132736111           # チケットを作るカテゴリーID（任意）
 
 # --- 1. 出品フォーム ---
 class SellModal(discord.ui.Modal, title='アカウント出品登録'):
