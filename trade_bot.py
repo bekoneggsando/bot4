@@ -343,23 +343,21 @@ class MyBot(commands.Bot):
     # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
 MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
 
-@bot.event
+@bot.event # ここが client なら @client.event
 async def on_ready():
-    # 1. サーバーのオブジェクトを作成
     guild = discord.Object(id=MY_GUILD_ID)
 
-    # 2. コマンドをこのサーバーにコピーして同期（これで重複が消え、反映も早くなる）
+    # 重複を消すための大事な処理
     bot.tree.copy_global_to(guild=guild)
     await bot.tree.sync(guild=guild)
     
-    print(f"✅ {bot.user} 起動 & コマンド同期完了")
+    print(f"✅ {bot.user} 起動完了")
 
-    # 3. チケットパネルの自動送信処理（もう一つの on_ready の中身をここに合体）
+    # チケットパネル
     channel = bot.get_channel(TICKET_PANEL_CH_ID)
     if channel:
         already = False
         async for m in channel.history(limit=10):
-            # bot.user に書き換え（self.userの代わり）
             if m.author == bot.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
                 already = True
                 break
@@ -368,7 +366,6 @@ async def on_ready():
                 embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), 
                 view=TicketLaunchView()
             )
-            print("🎫 チケットパネルを送信しました")
 
     @tasks.loop(minutes=5)
     async def update_panel(self):
