@@ -535,6 +535,15 @@ def add_achievement(user_id):
 import discord
 from discord import app_commands
 
+# インテントの設定
+intents = discord.Intents.default()
+intents.members = True # メンバーをいじるので必須
+intents.message_content = True
+
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client) # ← これが必要です！
+
+# --- この後に SellModal や InternalBuyView を書く ---
 # --- 設定：スタッフ役職のIDを入れてください ---
 STAFF_ROLE_ID = 1478964390530121964  # 仲介スタッフの役職ID
 TICKET_CATEGORY_ID = 1483362870132736111           # チケットを作るカテゴリーID（任意）
