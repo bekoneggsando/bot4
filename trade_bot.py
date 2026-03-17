@@ -343,12 +343,12 @@ class MyBot(commands.Bot):
     # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
 MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
 
-
 @tasks.loop(minutes=5)
-async def update_panel(self):   
+    async def update_panel(self):
         channel = self.get_channel(PANEL_CH_ID)
         log_ch = self.get_channel(LOG_CHANNEL_ID)
         if not channel or not log_ch: return
+        
         stats = {"total": 0, "success": 0, "fail": 0, "staff": {}}
         async for msg in log_ch.history(limit=1000):
             if not msg.embeds or not msg.embeds[0].title: continue
@@ -359,13 +359,15 @@ async def update_panel(self):
                 else: stats["fail"] += 1
                 try:
                     s_id = int(emb.footer.text.replace("Staff_ID: ", ""))
-                    if s_id not in stats["staff"]: stats["staff"][s_id] = {"total": 0, "stars": [], "name": emb.fields[0].value}
+                    if s_id not in stats["staff"]: 
+                        stats["staff"][s_id] = {"total": 0, "stars": [], "name": emb.fields[0].value}
                     stats["staff"][s_id]["total"] += 1
                 except: continue
             elif "新着レビュー" in emb.title:
                 try:
                     s_id = int(re.search(r'\d+', emb.fields[1].value).group())
-                    if s_id in stats["staff"]: stats["staff"][s_id]["stars"].append(len(emb.fields[0].value))
+                    if s_id in stats["staff"]: 
+                        stats["staff"][s_id]["stars"].append(len(emb.fields[0].value))
                 except: continue
 
         embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
