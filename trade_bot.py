@@ -159,21 +159,38 @@ class FinishView(discord.ui.View):
         super().__init__(timeout=None)
         self.staff_id = staff_id
 
+    # 役職ランクアップの処理（これをViewの中に忘れずに入れておいてください）
+    async def update_rank(self, member, count):
+        new_role_id = None
+        for threshold in sorted(RANK_ROLES.keys(), reverse=True):
+            if count >= threshold:
+                new_role_id = RANK_ROLES[threshold]
+                break
+        if not new_role_id: return None
+
+        new_role = member.guild.get_role(new_role_id)
+        if new_role and new_role not in member.roles:
+            # 古いランク役職を削除して新しいのを付ける
+            old_roles = [member.guild.get_role(rid) for rid in RANK_ROLES.values() if member.guild.get_role(rid) in member.roles]
+            if old_roles: await member.remove_roles(*old_roles)
+            await member.add_roles(new_role)
+            return new_role.name
+        return None
+
     @discord.ui.button(label="成功 ✅", style=discord.ButtonStyle.success, custom_id="finish_success")
     async def success(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.staff_id is None:
-            self.staff_id = self.get_staff_id_from_topic(interaction.channel.topic)
-        await self.process_record(interaction, "成功")
-        # 1. 実績を1増やす
+        # 1. 最初に「考え中...」状態にする（必須！）
+        await interaction.response.defer()
+
+        # 2. 実績を計算して称号をチェック
         count = add_achievement(interaction.user.id)
-        
-        # 2. ランクアップ判定（役職の付け替え）
         rank_name = await self.update_rank(interaction.user, count)
 
-        # 3. ログ保存のメイン処理（元からあるやつ）を動かす
+        # 3. ログ保存のメイン処理を1回だけ動かす
+        # ※process_record の中にある interaction.response.defer() は消しておいてくださいね！
         await self.process_record(interaction, "成功")
 
-        # 4. お祝いメッセージを画面に出す
+        # 4. お祝いメッセージを「followup」で出す
         msg = f"✅ 取引成功！累計実績が **{count}回** になりました。"
         if rank_name:
             msg += f"\n🎉 **昇格おめでとうございます！** あなたは新たに【**{rank_name}**】の称号を手にしました！"
