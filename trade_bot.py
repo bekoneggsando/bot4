@@ -343,29 +343,6 @@ class MyBot(commands.Bot):
     # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
 MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
 
-@bot.event # ここが client なら @client.event
-async def on_ready():
-    guild = discord.Object(id=MY_GUILD_ID)
-
-    # 重複を消すための大事な処理
-    bot.tree.copy_global_to(guild=guild)
-    await bot.tree.sync(guild=guild)
-    
-    print(f"✅ {bot.user} 起動完了")
-
-    # チケットパネル
-    channel = bot.get_channel(TICKET_PANEL_CH_ID)
-    if channel:
-        already = False
-        async for m in channel.history(limit=10):
-            if m.author == bot.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
-                already = True
-                break
-        if not already:
-            await channel.send(
-                embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), 
-                view=TicketLaunchView()
-            )
 
     @tasks.loop(minutes=5)
     async def update_panel(self):
@@ -402,6 +379,31 @@ async def on_ready():
         await channel.send(embed=embed)
 
 bot = MyBot()
+
+@bot.event # ここが client なら @client.event
+async def on_ready():
+    guild = discord.Object(id=MY_GUILD_ID)
+
+    # 重複を消すための大事な処理
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
+    
+    print(f"✅ {bot.user} 起動完了")
+
+    # チケットパネル
+    channel = bot.get_channel(TICKET_PANEL_CH_ID)
+    if channel:
+        already = False
+        async for m in channel.history(limit=10):
+            if m.author == bot.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
+                already = True
+                break
+        if not already:
+            await channel.send(
+                embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), 
+                view=TicketLaunchView()
+            )
+
 
 @bot.tree.command(name="finish", description="取引終了")
 async def finish(interaction: discord.Interaction):
