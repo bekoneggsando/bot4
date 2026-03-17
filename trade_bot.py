@@ -572,25 +572,31 @@ def load_data():
     return {"official": GAMES_LIST, "pending": {}}
 
 # --- 1. 出品フォーム ---
-class SellModal(discord.ui.Modal, title='アカウント出品登録'):
+class SellModal(discord.ui.Modal):
+    # ① ここで game_name を受け取れるようにする
+    def __init__(self, game_name):
+        super().__init__(title=f"【{game_name}】出品登録")
+        self.game_name = game_name # ② これを忘れるとエラーになる！
+
+    # 入力欄の設定（ここはあなたのコードのままでOK）
     item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数')
-    price = discord.ui.TextInput(label='希望価格', placeholder='例：5000円')
+    price = discord.ui.TextInput(label='希望価格', placeholder='例：5000')
     pay_method = discord.ui.TextInput(label='支払い方法', placeholder='例：PayPay')
 
     async def on_submit(self, interaction: discord.Interaction):
-        # --- ここに学習機能を追加！ ---
-        data = load_data() # ① JSONから読み込む
+        # ここで「self.game_name」を使って学習機能が動くようになります！
+        data = load_data()
         
-        # もしリストにないゲーム名ならカウント
+        # --- 学習ロジック ---
         if self.game_name not in data["official"]:
             count = data["pending"].get(self.game_name, 0) + 1
             if count >= 2:
-                data["official"].append(self.game_name) # ② 2回目で仲間入り
+                data["official"].append(self.game_name)
                 if self.game_name in data["pending"]:
                     del data["pending"][self.game_name]
             else:
                 data["pending"][self.game_name] = count
-            save_data(data) # ③ JSONに保存
+            save_data(data)
         # --- 追加ここまで ---
 
         # ここから下の Embed の title に {self.game_name} を入れるとさらに良し！
