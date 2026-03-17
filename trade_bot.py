@@ -532,4 +532,91 @@ def add_achievement(user_id):
         json.dump(data, f, indent=4)
     return data[user_id_str]
 
+import discord
+from discord import app_commands
+
+# --- 設定：スタッフ役職のIDを入れてください ---
+STAFF_ROLE_ID = 123456789012345678  # 仲介スタッフの役職ID
+TICKET_CATEGORY_ID = None           # チケットを作るカテゴリーID（任意）
+
+# --- 1. 出品フォーム ---
+class SellModal(discord.ui.Modal, title='アカウント出品登録'):
+    item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数')
+    price = discord.ui.TextInput(label='希望価格', placeholder='例：5000円')
+    pay_method = discord.ui.TextInput(label='支払い方法', placeholder='例：PayPay')
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="📢 【出品】アカウント販売募集", color=discord.Color.gold())
+        embed.add_field(name="商品名", value=self.item_name.value, inline=False)
+        embed.add_field(name="価格", value=self.price.value, inline=True)
+        embed.add_field(name="支払い方法", value=self.pay_method.value, inline=True)
+        embed.add_field(name="出品者", value=interaction.user.mention, inline=False)
+        embed.set_footer(text="購入希望者は下のボタンを押してください")
+
+        # 購入ボタンに情報をセット
+        view = InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
+        await interaction.response.send_message(embed=embed, view=view)
+
+# --- 2. 購入ボタンとチケット自動作成 ---
+class InternalBuyView(discord.ui.View):
+    def __init__(self, item, price, pay, seller):
+        super().__init__(timeout=None)
+        self.item = item
+        self.price = price
+        self.pay = pay
+        self.seller = seller
+
+    @discord.ui.button(label="購入を希望する 🙋", style=discord.ButtonStyle.primary, custom_id="buy_int")
+    async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        buyer = interaction.user
+        guild = interaction.guild
+
+        # 自分自身の出品は買えないようにする
+        if buyer.id == self.seller.id:
+            return await interaction.response.send_message("自分の出品は購入できません！", ephemeral=True)
+
+        await interaction.response.send_message("取引チケットを作成しています...", ephemeral=True)
+
+        # 【重要】権限設定：出品者、購入者、スタッフ以外は見れない
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            buyer: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            self.seller: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        }
+        
+        # スタッフ役職も入れる
+        staff_role = guild.get_role(STAFF_ROLE_ID)
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+
+        # チャンネル作成
+        category = guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
+        ticket_channel = await guild.create_text_channel(
+            name=f"🤝-{buyer.name}",
+            category=category,
+            overwrites=overwrites,
+            topic=f"出品者: {self.seller.name} / 購入者: {buyer.name}"
+        )
+
+        # チケット内での案内メッセージ
+        info_embed = discord.Embed(title="🤝 取引チケット作成完了", color=discord.Color.blue(), description="スタッフが来るまでお待ちください。")
+        info_embed.add_field(name="商品名", value=self.item)
+        info_embed.add_field(name="価格", value=self.price)
+        info_embed.add_field(name="出品者", value=self.seller.mention)
+        info_embed.add_field(name="購入者", value=buyer.mention)
+        
+        # ここで以前作った「成功/失敗ボタン(FinishView)」を出す
+        # ※FinishView()はあなたのコードにあるクラス名に合わせてください
+        await ticket_channel.send(
+            content=f"{self.seller.mention} {buyer.mention} {staff_role.mention if staff_role else ''}",
+            embed=info_embed, 
+            view=FinishView() 
+        )
+
+# --- 3. コマンド登録 ---
+@tree.command(name="sell", description="アカウントの販売募集パネルを作成します")
+async def sell(interaction: discord.Interaction):
+    await interaction.response.send_modal(SellModal())
+
 bot.run(TOKEN)
