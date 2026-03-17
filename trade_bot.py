@@ -249,7 +249,6 @@ class FinishView(discord.ui.View):
         return int(match.group(1)) if match else None
 
     async def process_record(self, interaction, result):
-        await interaction.response.defer()
         # ★ここを追記！ 今の日時を使ってIDを作成する
         trade_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         
