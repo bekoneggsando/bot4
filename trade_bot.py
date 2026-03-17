@@ -571,12 +571,30 @@ class SellModal(discord.ui.Modal, title='アカウント出品登録'):
     pay_method = discord.ui.TextInput(label='支払い方法', placeholder='例：PayPay')
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="📢 【出品】アカウント販売募集", color=discord.Color.gold())
+        # --- ここに学習機能を追加！ ---
+        data = load_data() # ① JSONから読み込む
+        
+        # もしリストにないゲーム名ならカウント
+        if self.game_name not in data["official"]:
+            count = data["pending"].get(self.game_name, 0) + 1
+            if count >= 2:
+                data["official"].append(self.game_name) # ② 2回目で仲間入り
+                if self.game_name in data["pending"]:
+                    del data["pending"][self.game_name]
+            else:
+                data["pending"][self.game_name] = count
+            save_data(data) # ③ JSONに保存
+        # --- 追加ここまで ---
+
+        # ここから下の Embed の title に {self.game_name} を入れるとさらに良し！
+        embed = discord.Embed(title=f"📢 【{self.game_name}】アカウント販売募集", color=discord.Color.gold())
         embed.add_field(name="商品名", value=self.item_name.value, inline=False)
         embed.add_field(name="価格", value=self.price.value, inline=True)
         embed.add_field(name="支払い方法", value=self.pay_method.value, inline=True)
         embed.add_field(name="出品者", value=interaction.user.mention, inline=False)
         embed.set_footer(text="購入希望者は下のボタンを押してください")
+
+        # 以下、以前の InternalBuyView などの送信処理へ続く...
 
         # 購入ボタンに情報をセット
         view = InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
