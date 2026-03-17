@@ -9,6 +9,22 @@ import io
 import asyncio
 import random
 
+import json
+
+# JSONファイル名
+JSON_FILE = "learned_games.json"
+
+# 学習データの初期値（リストになければここが使われる）
+def load_data():
+    if os.path.exists(JSON_FILE):
+        with open(JSON_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"official": GAMES_LIST, "pending": {}} # GAMES_LISTはあなたが決めた50個のリスト
+
+def save_data(data):
+    with open(JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
 # ================= 設定エリア =================
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1478366462144942120  
