@@ -8,7 +8,7 @@ import math
 import io
 import asyncio
 import random
-
+import json
 # ================= 設定エリア =================
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1478366462144942120  
@@ -548,6 +548,29 @@ tree = app_commands.CommandTree(client) # ← これが必要です！
 STAFF_ROLE_ID = 1478964390530121964  # 仲介スタッフの役職ID
 TICKET_CATEGORY_ID = 1483362870132736111           # チケットを作るカテゴリーID（任意）
 
+# --- ゲームリストの定義 (ここから) ---
+GAMES_LIST = [
+    "モンスターストライク", "プロスピA", "バウンティラッシュ", "FGO",
+    "ポケコロツイン(ポケツイ)", "リヴリーアイランド", "原神", "ポケモンGO",
+    "VALORANT(ヴァロラント)", "フォートナイト(Fortnite)", "APEX Legends",
+    "あつまれ どうぶつの森(あつ森)", "ドラクエ10(DQX)", "FF14",
+    "ポケモン剣盾(ソードシールド)", "ポケモンSV(スカーレットバイオレット)"
+]
+# --- ゲームリストの定義 (ここまで) ---
+
+# JSONファイル名
+JSON_FILE = "learned_games.json"
+
+def load_data():
+    if os.path.exists(JSON_FILE):
+        try:
+            with open(JSON_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    # ファイルがない、または壊れている場合は初期リストを返す
+    return {"official": GAMES_LIST, "pending": {}}
+
 # --- 1. 出品フォーム ---
 class SellModal(discord.ui.Modal, title='アカウント出品登録'):
     item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数')
@@ -652,21 +675,8 @@ async def on_ready():
     await bot.tree.sync()
     print(f"✅ {bot.user} 起動 & コマンド同期完了")
 
-import json
 
-# JSONファイル名
-JSON_FILE = "learned_games.json"
 
-# 学習データの初期値（リストになければここが使われる）
-def load_data():
-    if os.path.exists(JSON_FILE):
-        with open(JSON_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"official": GAMES_LIST, "pending": {}} # GAMES_LISTはあなたが決めた50個のリスト
-
-def save_data(data):
-    with open(JSON_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
 
 bot.run(TOKEN)
 
