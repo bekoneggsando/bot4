@@ -344,9 +344,9 @@ class MyBot(commands.Bot):
 MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
 
 
-    @tasks.loop(minutes=5)
-    async def update_panel(self):
-        channel = self.get_channel(PANEL_CH_ID)
+@tasks.loop(minutes=5)
+async def update_panel(self):
+    　　channel = self.get_channel(PANEL_CH_ID)
         log_ch = self.get_channel(LOG_CHANNEL_ID)
         if not channel or not log_ch: return
         stats = {"total": 0, "success": 0, "fail": 0, "staff": {}}
