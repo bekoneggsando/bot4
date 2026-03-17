@@ -571,6 +571,11 @@ def load_data():
     # ファイルがない、または壊れている場合は初期リストを返す
     return {"official": GAMES_LIST, "pending": {}}
 
+# --- JSONを保存する関数（これを足す！） ---
+def save_data(data):
+    with open(JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
 # --- 1. 出品フォーム ---
 class SellModal(discord.ui.Modal):
     # ① ここで game_name を受け取れるようにする
