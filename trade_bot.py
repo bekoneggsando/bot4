@@ -153,47 +153,60 @@ class ReviewModal(discord.ui.Modal):
 
         await interaction.response.send_message("レビューを公開しました！", ephemeral=True)
 
-# --- 4. 終了・ログ保存View ---
+# --- 2. クラス本体 ---
 class FinishView(discord.ui.View):
     def __init__(self, staff_id=None): 
         super().__init__(timeout=None)
         self.staff_id = staff_id
 
-    # 役職ランクアップの処理（これをViewの中に忘れずに入れておいてください）
+    # 称号の付け替え（古い称号を消して新しいのを付ける）
     async def update_rank(self, member, count):
         new_role_id = None
+        # 現在の回数でなれる最高のランクを探す
         for threshold in sorted(RANK_ROLES.keys(), reverse=True):
             if count >= threshold:
                 new_role_id = RANK_ROLES[threshold]
                 break
+        
         if not new_role_id: return None
 
         new_role = member.guild.get_role(new_role_id)
+        
+        # 【重要】全ての称号用IDリストを作成
+        all_rank_ids = list(RANK_ROLES.values())
+        # 今持っている役職の中から、称号用の役職（ただし新しい役職以外）を抜き出す
+        roles_to_remove = [r for r in member.roles if r.id in all_rank_ids and r.id != new_role_id]
+
+        # 古い称号（見習い含む）を削除
+        if roles_to_remove:
+            await member.remove_roles(*roles_to_remove)
+        
+        # 新しい称号を付与
         if new_role and new_role not in member.roles:
-            # 古いランク役職を削除して新しいのを付ける
-            old_roles = [member.guild.get_role(rid) for rid in RANK_ROLES.values() if member.guild.get_role(rid) in member.roles]
-            if old_roles: await member.remove_roles(*old_roles)
             await member.add_roles(new_role)
             return new_role.name
         return None
 
+    # 「成功 ✅」ボタンが押されたとき
     @discord.ui.button(label="成功 ✅", style=discord.ButtonStyle.success, custom_id="finish_success")
     async def success(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 1. 最初に「考え中...」状態にする（必須！）
+        # 最初に応答を「保留（考え中）」にする
         await interaction.response.defer()
 
-        # 2. 実績を計算して称号をチェック
+        # 実績を +1 する
         count = add_achievement(interaction.user.id)
+        
+        # 称号を更新する（見習いからの卒業もここで行う）
         rank_name = await self.update_rank(interaction.user, count)
 
-        # 3. ログ保存のメイン処理を1回だけ動かす
-        # ※process_record の中にある interaction.response.defer() は消しておいてくださいね！
+        # 取引ログを保存（以前の process_record を呼び出す）
+        # ※process_record 内の defer() は消しておいてください！
         await self.process_record(interaction, "成功")
 
-        # 4. お祝いメッセージを「followup」で出す
-        msg = f"✅ 取引成功！累計実績が **{count}回** になりました。"
+        # 完了メッセージを followup で送信
+        msg = f"✅ 取引成功！累計実績: **{count}回**"
         if rank_name:
-            msg += f"\n🎉 **昇格おめでとうございます！** あなたは新たに【**{rank_name}**】の称号を手にしました！"
+            msg += f"\n🎉 **称号更新！** あなたは新たに【**{rank_name}**】になりました！"
         
         await interaction.followup.send(msg)
 
@@ -479,6 +492,7 @@ ACHIEVEMENTS_FILE = "achievements.json"
 
 # 称号ランクの役職ID（★ここを自分のサーバーのIDに書き換えてください）
 RANK_ROLES = {
+    0: 1483345847847747745,   # ★「仲介見習い」のID
     5: 1478964573276209253,   # ルーキー（5回〜）
     10: 1478964697469423667,  # 公認（10回〜）
     30: 1478964755279646872,  # ベテラン（30回〜）
