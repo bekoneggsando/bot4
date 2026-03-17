@@ -340,16 +340,35 @@ class MyBot(commands.Bot):
         self.update_panel.start()
         print("✅ コマンド同期完了")
 
-    async def on_ready(self):
-        print(f'✅ {self.user} 起動完了')
-        channel = self.get_channel(TICKET_PANEL_CH_ID)
-        if channel:
-            already = False
-            async for m in channel.history(limit=10):
-                if m.author == self.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
-                    already = True; break
-            if not already:
-                await channel.send(embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), view=TicketLaunchView())
+    # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
+MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
+
+@bot.event
+async def on_ready():
+    # 1. サーバーのオブジェクトを作成
+    guild = discord.Object(id=MY_GUILD_ID)
+
+    # 2. コマンドをこのサーバーにコピーして同期（これで重複が消え、反映も早くなる）
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
+    
+    print(f"✅ {bot.user} 起動 & コマンド同期完了")
+
+    # 3. チケットパネルの自動送信処理（もう一つの on_ready の中身をここに合体）
+    channel = bot.get_channel(TICKET_PANEL_CH_ID)
+    if channel:
+        already = False
+        async for m in channel.history(limit=10):
+            # bot.user に書き換え（self.userの代わり）
+            if m.author == bot.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
+                already = True
+                break
+        if not already:
+            await channel.send(
+                embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), 
+                view=TicketLaunchView()
+            )
+            print("🎫 チケットパネルを送信しました")
 
     @tasks.loop(minutes=5)
     async def update_panel(self):
@@ -680,11 +699,6 @@ async def sell(interaction: discord.Interaction, game_name: str):
     # 【ここを修正！】カッコの中に game_name を入れる
     await interaction.response.send_modal(SellModal(game_name=game_name))
 
-@bot.event
-async def on_ready():
-    # bot.tree を同期する
-    await bot.tree.sync()
-    print(f"✅ {bot.user} 起動 & コマンド同期完了")
 
 bot.run(TOKEN)
 
