@@ -623,9 +623,17 @@ class InternalBuyView(discord.ui.View):
             view=FinishView() 
         )
 
-# --- 3. コマンド登録 ---
-@tree.command(name="sell", description="アカウントの販売募集パネルを作成します")
+# ここを bot.tree に変える
+@bot.tree.command(name="sell", description="アカウントの販売募集パネルを作成します")
 async def sell(interaction: discord.Interaction):
+    # (中身はそのまま)
     await interaction.response.send_modal(SellModal())
 
+@bot.event
+async def on_ready():
+    # bot.tree を同期する
+    await bot.tree.sync()
+    print(f"✅ {bot.user} 起動 & コマンド同期完了")
+
 bot.run(TOKEN)
+
