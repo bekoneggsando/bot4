@@ -217,7 +217,7 @@ class FinishView(discord.ui.View):
         await self.process_record(interaction, "失敗")
 
     async def update_rank(self, member, count):
-        # 1. どのランクに該当するかチェック
+        # 1. ランク判定
         new_role_id = None
         for threshold in sorted(RANK_ROLES.keys(), reverse=True):
             if count >= threshold:
@@ -228,30 +228,37 @@ class FinishView(discord.ui.View):
             return None
 
         new_role = member.guild.get_role(new_role_id)
-        if new_role:
-            # --- ★ここからニックネーム変更処理 ---
-            try:
-                # [称号名] 名前 という形を作る
-                # member.global_name が無い場合は member.name を使う
-                display_name = member.global_name if member.global_name else member.name
-                new_nick = f"[{new_role.name}] {display_name}"
-                
-                # ニックネームを更新
-                await member.edit(nick=new_nick)
-            except Exception as e:
-                # サーバーオーナー（あなた）や、Botより高い役職の人だとエラーになるのでスルー
-                print(f"ニックネーム変更スキップ: {e}")
-            # --- ★ここまで ---
+        if not new_role:
+            print(f"⚠️ エラー: ID {new_role_id} の役職が見つかりません")
+            return None
 
-            # 2. 役職の付け替え（以前と同じ処理）
-            if new_role not in member.roles:
-                roles_to_remove = [member.guild.get_role(rid) for rid in RANK_ROLES.values() 
-                                   if member.guild.get_role(rid) in member.roles]
-                if roles_to_remove:
-                    await member.remove_roles(*roles_to_remove)
-                
-                await member.add_roles(new_role)
-                return new_role.name
+        # 2. ニックネーム変更（ここがチャット欄での見え方！）
+        try:
+            # 今の名前から余計な [称号] を一度消して、新しく付け直す
+            raw_name = member.display_name
+            if "]" in raw_name:
+                raw_name = raw_name.split("]")[-1].strip()
+            
+            new_nick = f"[{new_role.name}] {raw_name}"
+            
+            # 32文字を超えるとエラーになるのでカット
+            await member.edit(nick=new_nick[:32])
+            print(f"✅ {member.name} の名前を {new_nick} に変更しました")
+        except Exception as e:
+            # ここでエラー内容をコンソールに出すようにします
+            print(f"❌ 名前変更に失敗: {e}")
+
+        # 3. 役職の付け替え
+        if new_role not in member.roles:
+            # 全ての称号用IDをリスト化して、今の役職から外す
+            all_rank_ids = list(RANK_ROLES.values())
+            roles_to_remove = [r for r in member.roles if r.id in all_rank_ids]
+            
+            if roles_to_remove:
+                await member.remove_roles(*roles_to_remove)
+            
+            await member.add_roles(new_role)
+            return new_role.name
         return None
 
 
