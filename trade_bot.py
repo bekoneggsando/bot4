@@ -217,7 +217,7 @@ class FinishView(discord.ui.View):
         await self.process_record(interaction, "失敗")
 
     async def update_rank(self, member, count):
-        # どのランクに該当するかチェック
+        # 1. どのランクに該当するかチェック
         new_role_id = None
         for threshold in sorted(RANK_ROLES.keys(), reverse=True):
             if count >= threshold:
@@ -228,16 +228,30 @@ class FinishView(discord.ui.View):
             return None
 
         new_role = member.guild.get_role(new_role_id)
-        if new_role and new_role not in member.roles:
-            # 【重複防止】現在の称号リストに含まれる古い役職をすべて特定して外す
-            roles_to_remove = [member.guild.get_role(rid) for rid in RANK_ROLES.values() 
-                               if member.guild.get_role(rid) in member.roles]
-            if roles_to_remove:
-                await member.remove_roles(*roles_to_remove)
-            
-            # 新しい役職を付与
-            await member.add_roles(new_role)
-            return new_role.name
+        if new_role:
+            # --- ★ここからニックネーム変更処理 ---
+            try:
+                # [称号名] 名前 という形を作る
+                # member.global_name が無い場合は member.name を使う
+                display_name = member.global_name if member.global_name else member.name
+                new_nick = f"[{new_role.name}] {display_name}"
+                
+                # ニックネームを更新
+                await member.edit(nick=new_nick)
+            except Exception as e:
+                # サーバーオーナー（あなた）や、Botより高い役職の人だとエラーになるのでスルー
+                print(f"ニックネーム変更スキップ: {e}")
+            # --- ★ここまで ---
+
+            # 2. 役職の付け替え（以前と同じ処理）
+            if new_role not in member.roles:
+                roles_to_remove = [member.guild.get_role(rid) for rid in RANK_ROLES.values() 
+                                   if member.guild.get_role(rid) in member.roles]
+                if roles_to_remove:
+                    await member.remove_roles(*roles_to_remove)
+                
+                await member.add_roles(new_role)
+                return new_role.name
         return None
 
 
