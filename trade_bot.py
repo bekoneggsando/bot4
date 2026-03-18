@@ -445,13 +445,18 @@ bot = MyBot()
 
 @bot.event
 async def on_ready():
-    # 1. 掃除を実行する（ここを一時的に追加）
+    # 1. 掃除を実行する（メソッド名を修正しました）
     print("🧹 コマンドの大掃除を開始します...")
-    bot.tree.clear(guild=None) # グローバルを消去
-    # もし特定のサーバーIDがわかるなら↓も追加（123...は自分のサーバーIDに変えてね）
-    # bot.tree.clear(guild=discord.Object(id=1234567890)) 
     
-    await bot.tree.sync() # 同期して削除を反映
+    # 全サーバー共通（グローバル）のキャッシュを空にする
+    bot.tree.clear_commands(guild=None) 
+    
+    # サーバー指定のキャッシュも空にする（もしあれば）
+    # bot.tree.clear_commands(guild=discord.Object(id=123...)) 
+
+    # 空の状態をDiscordに送信して反映させる
+    await bot.tree.sync()
+    
     print("✅ 掃除完了！一度Botを止めて、この掃除コードを消してください。")
 
     # --- ここから下は元のコードのままでOK ---
