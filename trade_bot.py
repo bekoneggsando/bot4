@@ -385,7 +385,7 @@ bot = MyBot()
 
 @bot.event # ここが client なら @client.event
 async def on_ready():
-    guild = discord.Object(id=MY_GUILD_ID)
+    guild = discord.Object(id=GUILD_ID)
 
     # 重複を消すための大事な処理
     bot.tree.copy_global_to(guild=guild)
