@@ -619,5 +619,48 @@ async def send_staff_recruit(interaction: discord.Interaction):
     await channel.send(embed=embed, view=StaffRecruitView())
     await interaction.response.send_message(f"✅ {channel.mention} に募集パネルを送信しました。", ephemeral=True)
 
+@bot.tree.command(name="find", description="特定のゲームの商品を検索します")
+@app_commands.describe(game_name="検索したいゲーム名を入力")
+@app_commands.autocomplete(game_name=game_autocomplete) # 出品と同じ補完を使用
+async def find(interaction: discord.Interaction, game_name: str):
+    await interaction.response.defer(ephemeral=True)
+
+    exhibit_channel = bot.get_channel(EXHIBIT_CHANNEL_ID) # 出品一覧チャンネルのID
+    found_count = 0
+    embed_result = discord.Embed(
+        title=f"🔎 「{game_name}」の検索結果",
+        color=discord.Color.green(),
+        description="最新の出品から最大5件表示します。"
+    )
+
+    # 過去100件のメッセージをスキャン
+    async for message in exhibit_channel.history(limit=100):
+        if message.embeds:
+            embed = message.embeds[0]
+            
+            # Embedのタイトルやフッターにゲーム名が入っているかチェック
+            # (下で説明するModalの修正を合わせると確実になります)
+            target_text = f"{embed.title} {embed.footer.text if embed.footer else ''}".lower()
+            
+            if game_name.lower() in target_text:
+                # まだボタンが有効（売れていない）かチェック
+                # viewがある、またはボタンがグレーアウトしていないか等
+                status = "✅ 販売中"
+                
+                embed_result.add_field(
+                    name=f"{status} | {embed.title}",
+                    value=f"🔗 [商品を確認する]({message.jump_url})",
+                    inline=False
+                )
+                found_count += 1
+        
+        if found_count >= 5: # 5件見つかったら終了
+            break
+
+    if found_count == 0:
+        await interaction.followup.send(f"❌ 「{game_name}」に関連する商品は見つかりませんでした。")
+    else:
+        await interaction.followup.send(embed=embed_result)
+
 # 起動
 bot.run(TOKEN)
