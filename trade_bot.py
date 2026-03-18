@@ -697,25 +697,29 @@ class InternalBuyView(discord.ui.View):
 
 from discord import app_commands
 
-# ゲーム名のリストを検索・絞り込む関数
-async def game_autocomplete(
-    interaction: discord.Interaction,
-    current: str,
-) -> list[app_commands.Choice[str]]:
-    data = load_data()
-    # 入力された文字(current)が含まれるゲームだけを抽出して、あいうえお順に25個まで返す
-    choices = [
-        app_commands.Choice(name=game, value=game)
-        for game in data["official"] if current.lower() in game.lower()
-    ]
-    return choices[:25]
+class MyBot(commands.Bot):
+    # ...（以前の __init__ や setup_hook はそのまま）...
 
-# 出品コマンド本体
-@tree.command(name="sell", description="商品を出品します")
-@app_commands.autocomplete(game_name=game_autocomplete) # ここで絞り込み機能を合体！
-async def sell(interaction: discord.Interaction, game_name: str):
-    # ここで SellModal(game_name) を開く処理へ
-    await interaction.response.send_modal(SellModal(game_name))
+    # --- 1. 絞り込み関数（クラス内なので self を入れる） ---
+    async def game_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        data = load_data()
+        # 候補を抽出して「あいうえお順(sorted)」に並べ替える
+        choices = [
+            app_commands.Choice(name=game, value=game)
+            for game in sorted(data["official"]) if current.lower() in game.lower()
+        ]
+        return choices[:25]
+
+    # --- 2. 出品コマンド（tree ではなく app_commands.command を使う） ---
+    @app_commands.command(name="sell", description="商品を出品します")
+    @app_commands.autocomplete(game_name=game_autocomplete) 
+    async def sell(self, interaction: discord.Interaction, game_name: str):
+        # SellModalに選択されたゲーム名を渡して表示
+        await interaction.response.send_modal(SellModal(game_name))
 
 
 bot.run(TOKEN)
