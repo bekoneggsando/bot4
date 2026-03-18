@@ -144,17 +144,33 @@ class InternalBuyView(discord.ui.View):
         buyer = interaction.user
         guild = interaction.guild
 
+        # 自分の出品は買えないようにする（これ大事ですね！）
         if buyer.id == self.seller.id:
             return await interaction.response.send_message("自分の出品は購入できません！", ephemeral=True)
 
-        await interaction.response.send_message("取引チケットを作成しています...", ephemeral=True)
+        # --- 【ここがポイント！】ボタンを無効化して「売約済み」にする ---
+        button.disabled = True
+        button.label = f"売約済み (購入者: {buyer.name})"
+        button.style = discord.ButtonStyle.secondary # グレーに変更
+        
+        # 元の出品パネル（メッセージ）を更新してボタンを押せなくする
+        await interaction.message.edit(view=self)
+        # -------------------------------------------------------
 
+        await interaction.response.send_message(f"取引チケットを作成しました！ {buyer.mention}", ephemeral=True)
+
+        # 以降、チャンネル作成処理...（お送りいただいたコードのままでOK！）
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             buyer: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             self.seller: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
+        
+        # （中略：チャンネル作成や権限設定）
+
+        # チャンネル作成後の案内など
+        # ...
         
         staff_role = guild.get_role(STAFF_ROLE_ID)
         if staff_role:
