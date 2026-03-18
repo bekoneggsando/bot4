@@ -531,16 +531,27 @@ async def game_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 # --- スラッシュコマンド ---
-@bot.tree.command(name="sell", description="商品を出品します（画像は任意です）")
+@bot.tree.command(name="sell", description="商品を出品します（最大3枚まで画像添付可）")
 @app_commands.describe(
-    game_name="取引するゲーム名を入力または選択",
-    image="商品画像があれば添付してください（任意）"
+    game_name="ゲーム名を選択",
+    image1="メイン画像（一番大きく表示されます）",
+    image2="詳細画像2（スレッドに投稿されます）",
+    image3="詳細画像3（スレッドに投稿されます）"
 )
 @app_commands.autocomplete(game_name=game_autocomplete)
-async def sell(interaction: discord.Interaction, game_name: str, image: discord.Attachment = None):
-    # Modalに画像URLを渡してあげる
-    image_url = image.url if image else None
-    await interaction.response.send_modal(SellModal(game_name, image_url))
+async def sell(
+    interaction: discord.Interaction, 
+    game_name: str, 
+    image1: discord.Attachment = None, 
+    image2: discord.Attachment = None,
+    image3: discord.Attachment = None
+):
+    # 画像URLをリストにまとめる
+    images = [img.url for img in [image1, image2, image3] if img]
+    
+    # Modalにゲーム名と画像リストを渡す
+    # (Modalの__init__を引数対応にする必要があります)
+    await interaction.response.send_modal(SellModal(game_name, images))
 
 @bot.tree.command(name="finish", description="取引終了")
 async def finish(interaction: discord.Interaction):
