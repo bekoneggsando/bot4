@@ -371,6 +371,40 @@ class MyBot(commands.Bot):
                         stats["staff"][s_id]["stars"].append(len(emb.fields[0].value))
                 except: continue
 
+        @tasks.loop(minutes=5)
+    async def update_panel(self):
+        # ... (あなたの今の update_panel の中身) ...
+        # (最後の方の await channel.send(embed=embed) の下あたりから)
+
+    # --------------------------------------------------
+    # ここから追加！ (インデント/段差を揃えてね)
+    # --------------------------------------------------
+
+    # 1. ゲーム名を検索・絞り込む機能
+    async def game_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        data = load_data()
+        # 入力された文字が含まれるゲームを「あいうえお順」で出す
+        choices = [
+            app_commands.Choice(name=game, value=game)
+            for game in sorted(data["official"]) if current.lower() in game.lower()
+        ]
+        return choices[:25]
+
+    # 2. 出品コマンド本体
+    @app_commands.command(name="sell", description="商品を出品します")
+    @app_commands.describe(game_name="取引するゲーム名を入力または選択してください")
+    @app_commands.autocomplete(game_name=game_autocomplete) # 上の絞り込み機能と合体
+    async def sell(self, interaction: discord.Interaction, game_name: str):
+        # 以前作った SellModal を開く（ゲーム名を渡す）
+        await interaction.response.send_modal(SellModal(game_name))
+
+    # --------------------------------------------------
+    # 追加ここまで
+    # --------------------------------------------------
         embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
         embed.add_field(name="取引総数", value=f"{stats['total']}件", inline=True)
         embed.add_field(name="成功 / 失敗", value=f"✅ {stats['success']} / ❌ {stats['fail']}", inline=True)
@@ -694,28 +728,6 @@ class InternalBuyView(discord.ui.View):
             content=f"{self.seller.mention} {buyer.mention} {staff_role.mention if staff_role else ''}",
             embed=info_embed, 
         )
-
-# --- 1. 絞り込み関数（検索・あいうえお順） ---
-    async def game_autocomplete(
-        self,
-        interaction: discord.Interaction,
-        current: str,
-    ) -> list[app_commands.Choice[str]]:
-        data = load_data()
-        # 候補を抽出して「あいうえお順」に並べ替える
-        choices = [
-            app_commands.Choice(name=game, value=game)
-            for game in sorted(data["official"]) if current.lower() in game.lower()
-        ]
-        return choices[:25]
-
-    # --- 2. 出品コマンド（上の関数と合体） ---
-    @app_commands.command(name="sell", description="商品を出品します")
-    @app_commands.describe(game_name="ゲーム名を入力または選択してください")
-    @app_commands.autocomplete(game_name=game_autocomplete) # ここで1番とつなぐ
-    async def sell(self, interaction: discord.Interaction, game_name: str):
-        # SellModalに選択されたゲーム名を渡して表示
-        await interaction.response.send_modal(SellModal(game_name))
 
 
 
