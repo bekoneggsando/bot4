@@ -695,11 +695,27 @@ class InternalBuyView(discord.ui.View):
             embed=info_embed, 
         )
 
-# ここを bot.tree に変える
-@bot.tree.command(name="sell", description="ゲーム名を選んで出品します")
+from discord import app_commands
+
+# ゲーム名のリストを検索・絞り込む関数
+async def game_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    data = load_data()
+    # 入力された文字(current)が含まれるゲームだけを抽出して、あいうえお順に25個まで返す
+    choices = [
+        app_commands.Choice(name=game, value=game)
+        for game in data["official"] if current.lower() in game.lower()
+    ]
+    return choices[:25]
+
+# 出品コマンド本体
+@tree.command(name="sell", description="商品を出品します")
+@app_commands.autocomplete(game_name=game_autocomplete) # ここで絞り込み機能を合体！
 async def sell(interaction: discord.Interaction, game_name: str):
-    # 【ここを修正！】カッコの中に game_name を入れる
-    await interaction.response.send_modal(SellModal(game_name=game_name))
+    # ここで SellModal(game_name) を開く処理へ
+    await interaction.response.send_modal(SellModal(game_name))
 
 
 bot.run(TOKEN)
