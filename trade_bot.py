@@ -534,19 +534,15 @@ async def game_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 # --- スラッシュコマンド ---
-@bot.tree.command(name="sell", description="商品を出品します")
-async def sell(interaction: discord.Interaction, game_name: str, image: discord.Attachment = None):
-    # 画像がある場合はURL、ない場合はNoneを明示的に渡す
-    image_url = image.url if image is not None else None
-    
-    await interaction.response.send_modal(SellModal(game_name, image_url))
+# --- スラッシュコマンド (複数画像・補完対応版) ---
+@bot.tree.command(name="sell", description="商品を出品します（画像は最大3枚まで）")
 @app_commands.describe(
     game_name="ゲーム名を選択",
-    image1="メイン画像（一番大きく表示されます）",
-    image2="詳細画像2（スレッドに投稿されます）",
-    image3="詳細画像3（スレッドに投稿されます）"
+    image1="メイン画像（出品パネルに表示）",
+    image2="詳細画像2（スレッドに投稿）",
+    image3="詳細画像3（スレッドに投稿）"
 )
-@app_commands.autocomplete(game_name=game_autocomplete)
+@app_commands.autocomplete(game_name=game_autocomplete) # 補完を有効化
 async def sell(
     interaction: discord.Interaction, 
     game_name: str, 
@@ -554,11 +550,21 @@ async def sell(
     image2: discord.Attachment = None,
     image3: discord.Attachment = None
 ):
-    # 画像URLをリストにまとめる
+    # 画像があるものをリストにまとめる
     images = [img.url for img in [image1, image2, image3] if img]
     
+    # 未登録ゲームの学習ロジック
+    data = load_data()
+    if game_name not in data["official"]:
+        count = data["pending"].get(game_name, 0) + 1
+        if count >= 2:
+            data["official"].append(game_name)
+            if game_name in data["pending"]: del data["pending"][game_name]
+        else:
+            data["pending"][game_name] = count
+        save_data(data)
+
     # Modalにゲーム名と画像リストを渡す
-    # (Modalの__init__を引数対応にする必要があります)
     await interaction.response.send_modal(SellModal(game_name, images))
 
 @bot.tree.command(name="finish", description="取引終了")
