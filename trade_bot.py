@@ -445,37 +445,42 @@ bot = MyBot()
 
 @bot.event
 async def on_ready():
-    # 1. 掃除を実行する（メソッド名を修正しました）
-    print("🧹 コマンドの大掃除を開始します...")
-    
-    # 全サーバー共通（グローバル）のキャッシュを空にする
-    bot.tree.clear_commands(guild=None) 
-    
-    # サーバー指定のキャッシュも空にする（もしあれば）
-    # bot.tree.clear_commands(guild=discord.Object(id=123...)) 
+    # 1. 起動メッセージとステータス設定
+    print(f"✅ {bot.user} 起動完了")
+    await bot.change_presence(activity=discord.Game("仲介システム稼働中"))
 
-    # 空の状態をDiscordに送信して反映させる
-    await bot.tree.sync()
-    
-    print("✅ 掃除完了！一度Botを止めて、この掃除コードを消してください。")
+    # 2. チケットパネルの設置確認（エラーで止まらないように保護）
+    try:
+        channel = bot.get_channel(TICKET_PANEL_CH_ID)
+        if channel:
+            already = False
+            # 過去10件のメッセージをスキャン
+            async for m in channel.history(limit=10):
+                if m.author == bot.user and m.embeds:
+                    # タイトルが含まれているかチェック
+                    if "仲介チケット発行" in (m.embeds[0].title or ""):
+                        already = True
+                        print("ℹ️ チケットパネルは既に存在します。")
+                        break
+            
+            # まだパネルがない場合のみ送信
+            if not already:
+                embed = discord.Embed(
+                    title="🎫 仲介チケット発行", 
+                    description="下のボタンから作成してください。", 
+                    color=0x2ecc71
+                )
+                await channel.send(embed=embed, view=TicketLaunchView())
+                print("🆕 チケットパネルを新しく設置しました。")
+        else:
+            print(f"⚠️ 警告: ID {TICKET_PANEL_CH_ID} のチャンネルが見つかりません。")
 
-    # --- ここから下は元のコードのままでOK ---
-    game = discord.Game("ゲーム名")
-    await bot.change_presence(activity=game)
-    
-    # チケットパネルの設置確認
-    channel = bot.get_channel(TICKET_PANEL_CH_ID)
-    if channel:
-        already = False
-        async for m in channel.history(limit=10):
-            if m.author == bot.user and m.embeds and "仲介チケット発行" in m.embeds[0].title:
-                already = True
-                break
-        if not already:
-            await channel.send(
-                embed=discord.Embed(title="🎫 仲介チケット発行", description="下のボタンから作成してください。", color=0x2ecc71), 
-                view=TicketLaunchView()
-            )
+    except discord.errors.Forbidden:
+        print("🚫 権限エラー: メッセージ履歴を読む権限がBotにありません。")
+    except Exception as e:
+        print(f"⚠️ 予期せぬエラーが発生しました: {e}")
+
+    print("----------------------------------------")
 
 @bot.event
 async def on_message(message):
