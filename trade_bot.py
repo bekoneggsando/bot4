@@ -534,7 +534,12 @@ async def game_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 # --- スラッシュコマンド ---
-@bot.tree.command(name="sell", description="商品を出品します（最大3枚まで画像添付可）")
+@bot.tree.command(name="sell", description="商品を出品します")
+async def sell(interaction: discord.Interaction, game_name: str, image: discord.Attachment = None):
+    # 画像がある場合はURL、ない場合はNoneを明示的に渡す
+    image_url = image.url if image is not None else None
+    
+    await interaction.response.send_modal(SellModal(game_name, image_url))
 @app_commands.describe(
     game_name="ゲーム名を選択",
     image1="メイン画像（一番大きく表示されます）",
