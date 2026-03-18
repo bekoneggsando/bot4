@@ -198,37 +198,37 @@ class InternalBuyView(discord.ui.View):
         )
 
 class SellModal(discord.ui.Modal):
-    def __init__(self, game_name):
-        super().__init__(title=f"出品登録")
-        self.game_name = game_name 
+    def __init__(self, game_name, image_url=None):
+        super().__init__(title="出品登録")
+        self.game_name = game_name
+        self.image_url = image_url # 画像URLを保存しておく
 
     item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数')
     price = discord.ui.TextInput(label='希望価格', placeholder='例：5000')
     pay_method = discord.ui.TextInput(label='支払い方法', placeholder='例：PayPay')
 
     async def on_submit(self, interaction: discord.Interaction):
-        data = load_data()
-        
-        # 学習ロジック
-        if self.game_name not in data["official"]:
-            count = data["pending"].get(self.game_name, 0) + 1
-            if count >= 2:
-                data["official"].append(self.game_name)
-                if self.game_name in data["pending"]:
-                    del data["pending"][self.game_name]
-            else:
-                data["pending"][self.game_name] = count
-            save_data(data)
-
+        # Embedの作成
         embed = discord.Embed(title=f"📢 【{self.game_name}】アカウント販売募集", color=discord.Color.gold())
         embed.add_field(name="商品名", value=self.item_name.value, inline=False)
         embed.add_field(name="価格", value=self.price.value, inline=True)
         embed.add_field(name="支払い方法", value=self.pay_method.value, inline=True)
         embed.add_field(name="出品者", value=interaction.user.mention, inline=False)
-        embed.set_footer(text="購入希望者は下のボタンを押してください")
+        
+        # もし画像URLがあればセットする
+        if self.image_url:
+            embed.set_image(url=self.image_url)
 
+        embed.set_footer(text=f"GameTag: {self.game_name}")
+
+        # 購入ボタンの作成
         view = InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
-        await interaction.response.send_message(embed=embed, view=view)
+        
+        # 出品チャンネルへ送信
+        exhibit_channel = interaction.guild.get_channel(EXHIBIT_CHANNEL_ID)
+        if exhibit_channel:
+            await exhibit_channel.send(embed=embed, view=view)
+            await interaction.response.send_message(f"✅ 出品完了しました！", ephemeral=True)
 
 
 # --- レビュー・評価システム ---
