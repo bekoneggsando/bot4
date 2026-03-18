@@ -211,15 +211,18 @@ class SellModal(discord.ui.Modal):
         # Embedの作成
         embed = discord.Embed(title=f"📢 【{self.game_name}】アカウント販売募集", color=discord.Color.gold())
         embed.add_field(name="商品名", value=self.item_name.value, inline=False)
-        embed.add_field(name="価格", value=self.price.value, inline=True)
+        embed.add_field(name="価格", value=f"{self.price.value}円", inline=True)
         embed.add_field(name="支払い方法", value=self.pay_method.value, inline=True)
         embed.add_field(name="出品者", value=interaction.user.mention, inline=False)
         
-        # もし画像URLがあればセットする
-        if self.image_url:
+        # --- 【修正ポイント】URLがちゃんと存在し、かつ空文字でないかチェック ---
+        if self.image_url and str(self.image_url).startswith("http"):
             embed.set_image(url=self.image_url)
 
         embed.set_footer(text=f"GameTag: {self.game_name}")
+        # -----------------------------------------------------------
+
+        # 購入ボタンなどの続き...
 
         # 購入ボタンの作成
         view = InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
