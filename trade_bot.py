@@ -531,11 +531,16 @@ async def game_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 # --- スラッシュコマンド ---
-@bot.tree.command(name="sell", description="商品を出品します")
-@app_commands.describe(game_name="取引するゲーム名を入力または選択")
+@bot.tree.command(name="sell", description="商品を出品します（画像は任意です）")
+@app_commands.describe(
+    game_name="取引するゲーム名を入力または選択",
+    image="商品画像があれば添付してください（任意）"
+)
 @app_commands.autocomplete(game_name=game_autocomplete)
-async def sell(interaction: discord.Interaction, game_name: str):
-    await interaction.response.send_modal(SellModal(game_name))
+async def sell(interaction: discord.Interaction, game_name: str, image: discord.Attachment = None):
+    # Modalに画像URLを渡してあげる
+    image_url = image.url if image else None
+    await interaction.response.send_modal(SellModal(game_name, image_url))
 
 @bot.tree.command(name="finish", description="取引終了")
 async def finish(interaction: discord.Interaction):
