@@ -334,7 +334,7 @@ class MyBot(commands.Bot):
         self.add_view(FinishView(None))
         self.add_view(StaffRecruitView())
         
-        # GUILD_ID を使用（もしエラーが出るならここを数字に書き換え）
+        # GUILD_ID を使用
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
@@ -371,49 +371,39 @@ class MyBot(commands.Bot):
                         stats["staff"][s_id]["stars"].append(len(emb.fields[0].value))
                 except: continue
 
-        @tasks.loop(minutes=5)
-    async def update_panel(self):
-        # ... (あなたの今の update_panel の中身) ...
-        # (最後の方の await channel.send(embed=embed) の下あたりから)
+        # パネルの作成と送信/更新
+        import math
+        embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
+        embed.add_field(name="取引総数", value=f"{stats['total']}件", inline=True)
+        embed.add_field(name="成功 / 失敗", value=f"✅ {stats['success']} / ❌ {stats['fail']}", inline=True)
+        ranked = sorted([{'id': k, 'score': (sum(v["stars"])/len(v["stars"]) if v["stars"] else 0) * math.log1p(len(v["stars"])) * math.log1p(v["total"])} for k, v in stats["staff"].items()], key=lambda x: x['score'], reverse=True)[:5]
+        embed.add_field(name="🏆 信頼度ランキング", value="\n".join([f"{i+1}位: <@{s['id']}> ({s['score']:.1f})" for i, s in enumerate(ranked)]) or "なし", inline=False)
+        
+        async for m in channel.history(limit=10):
+            if m.author == self.user and m.embeds and "統計パネル" in m.embeds[0].title:
+                await m.edit(embed=embed)
+                return
+        await channel.send(embed=embed)
 
-    # --------------------------------------------------
-    # ここから追加！ (インデント/段差を揃えてね)
-    # --------------------------------------------------
-
-    # 1. ゲーム名を検索・絞り込む機能
+    # --- 1. ゲーム名を検索・絞り込む機能 ---
     async def game_autocomplete(
         self,
         interaction: discord.Interaction,
         current: str,
     ) -> list[app_commands.Choice[str]]:
         data = load_data()
-        # 入力された文字が含まれるゲームを「あいうえお順」で出す
         choices = [
             app_commands.Choice(name=game, value=game)
             for game in sorted(data["official"]) if current.lower() in game.lower()
         ]
         return choices[:25]
 
-    # 2. 出品コマンド本体
+    # --- 2. 出品コマンド本体 ---
     @app_commands.command(name="sell", description="商品を出品します")
     @app_commands.describe(game_name="取引するゲーム名を入力または選択してください")
-    @app_commands.autocomplete(game_name=game_autocomplete) # 上の絞り込み機能と合体
+    @app_commands.autocomplete(game_name=game_autocomplete)
     async def sell(self, interaction: discord.Interaction, game_name: str):
-        # 以前作った SellModal を開く（ゲーム名を渡す）
         await interaction.response.send_modal(SellModal(game_name))
-
-    # --------------------------------------------------
-    # 追加ここまで
-    # --------------------------------------------------
-        embed = discord.Embed(title="📊 サーバー統計パネル", color=discord.Color.blue())
-        embed.add_field(name="取引総数", value=f"{stats['total']}件", inline=True)
-        embed.add_field(name="成功 / 失敗", value=f"✅ {stats['success']} / ❌ {stats['fail']}", inline=True)
-        ranked = sorted([{'id': k, 'score': (sum(v["stars"])/len(v["stars"]) if v["stars"] else 0) * math.log1p(len(v["stars"])) * math.log1p(v["total"])} for k, v in stats["staff"].items()], key=lambda x: x['score'], reverse=True)[:5]
-        embed.add_field(name="🏆 信頼度ランキング", value="\n".join([f"{i+1}位: <@{s['id']}> ({s['score']:.1f})" for i, s in enumerate(ranked)]) or "なし", inline=False)
-        async for m in channel.history(limit=10):
-            if m.author == self.user and m.embeds and "統計パネル" in m.embeds[0].title:
-                await m.edit(embed=embed); return
-        await channel.send(embed=embed)
 
 bot = MyBot()
 
