@@ -198,40 +198,64 @@ class InternalBuyView(discord.ui.View):
         )
 
 class SellModal(discord.ui.Modal):
-    def __init__(self, game_name, image_url=None):
-        super().__init__(title="出品登録")
+    def __init__(self, game_name, images=None):
+        super().__init__(title="【フォーラム】出品登録")
         self.game_name = game_name
-        self.image_url = image_url # 画像URLを保存しておく
+        self.images = images or []
 
-    item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数')
+    item_name = discord.ui.TextInput(label='商品名', placeholder='例：伝説スキン多数', max_length=50)
     price = discord.ui.TextInput(label='希望価格', placeholder='例：5000')
     pay_method = discord.ui.TextInput(label='支払い方法', placeholder='例：PayPay')
+    description = discord.ui.TextInput(
+        label='詳細説明', 
+        style=discord.TextStyle.paragraph, 
+        placeholder='商品の詳細や注意点を記入してください', 
+        required=False
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Embedの作成
-        embed = discord.Embed(title=f"📢 【{self.game_name}】アカウント販売募集", color=discord.Color.gold())
-        embed.add_field(name="商品名", value=self.item_name.value, inline=False)
-        embed.add_field(name="価格", value=f"{self.price.value}円", inline=True)
-        embed.add_field(name="支払い方法", value=self.pay_method.value, inline=True)
-        embed.add_field(name="出品者", value=interaction.user.mention, inline=False)
+        await interaction.response.defer(ephemeral=True)
         
-        # --- 【修正ポイント】URLがちゃんと存在し、かつ空文字でないかチェック ---
-        if self.image_url and str(self.image_url).startswith("http"):
-            embed.set_image(url=self.image_url)
+        forum_channel = interaction.guild.get_channel(FORUM_CHANNEL_ID)
+        if not isinstance(forum_channel, discord.ForumChannel):
+            return await interaction.followup.send("❌ 指定されたチャンネルがフォーラムではありません。", ephemeral=True)
 
-        embed.set_footer(text=f"GameTag: {self.game_name}")
-        # -----------------------------------------------------------
-
-        # 購入ボタンなどの続き...
-
-        # 購入ボタンの作成
-        view = InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
+        # 1. メインのEmbed作成（投稿の最初のメッセージ用）
+        embed = discord.Embed(title=f"📢 出品情報", color=discord.Color.gold())
+        embed.add_field(name="🎮 ゲーム", value=self.game_name, inline=True)
+        embed.add_field(name="💰 価格", value=f"{self.price.value}円", inline=True)
+        embed.add_field(name="💳 支払い", value=self.pay_method.value, inline=True)
+        embed.add_field(name="👤 出品者", value=interaction.user.mention, inline=False)
         
-        # 出品チャンネルへ送信
-        exhibit_channel = interaction.guild.get_channel(EXHIBIT_CHANNEL_ID)
-        if exhibit_channel:
-            await exhibit_channel.send(embed=embed, view=view)
-            await interaction.response.send_message(f"✅ 出品完了しました！", ephemeral=True)
+        if self.description.value:
+            embed.add_field(name="📝 詳細", value=self.description.value, inline=False)
+
+        # 画像がある場合、1枚目をメインにセット
+        files = []
+        if self.images:
+            embed.set_image(url=self.images[0])
+
+        # 2. フォーラムに新規投稿（スレッド作成）
+        # タイトルを「【ゲーム名】商品名」にすると見やすいです
+        thread_title = f"【{self.game_name}】{self.item_name.value}"
+        
+        # 投稿作成（content または embed を指定可能）
+        result = await forum_channel.create_thread(
+            name=thread_title,
+            embed=embed,
+            view=InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
+        )
+        
+        post_thread = result.thread
+
+        # 3. 2枚目以降の画像をスレッド内に連投
+        if len(self.images) > 1:
+            for i, img_url in enumerate(self.images[1:], 2):
+                sub_embed = discord.Embed(title=f"📸 詳細画像 {i}", color=discord.Color.blue())
+                sub_embed.set_image(url=img_url)
+                await post_thread.send(embed=sub_embed)
+
+        await interaction.followup.send(f"✅ フォーラムに出品しました！\n{post_thread.mention}", ephemeral=True)
 
 
 # --- レビュー・評価システム ---
@@ -535,14 +559,14 @@ async def game_autocomplete(interaction: discord.Interaction, current: str) -> l
 
 # --- スラッシュコマンド ---
 # --- スラッシュコマンド (複数画像・補完対応版) ---
-@bot.tree.command(name="sell", description="商品を出品します（画像は最大3枚まで）")
+@bot.tree.command(name="sell", description="フォーラムに商品を出品します")
 @app_commands.describe(
     game_name="ゲーム名を選択",
-    image1="メイン画像（出品パネルに表示）",
-    image2="詳細画像2（スレッドに投稿）",
-    image3="詳細画像3（スレッドに投稿）"
+    image1="メイン画像（一覧のサムネイルになります）",
+    image2="詳細画像2",
+    image3="詳細画像3"
 )
-@app_commands.autocomplete(game_name=game_autocomplete) # 補完を有効化
+@app_commands.autocomplete(game_name=game_autocomplete)
 async def sell(
     interaction: discord.Interaction, 
     game_name: str, 
@@ -550,23 +574,19 @@ async def sell(
     image2: discord.Attachment = None,
     image3: discord.Attachment = None
 ):
-    # 画像があるものをリストにまとめる
+    # 画像URLを抽出
     images = [img.url for img in [image1, image2, image3] if img]
     
-    # 未登録ゲームの学習ロジック
+    # 学習ロジック（既存のものを利用）
     data = load_data()
     if game_name not in data["official"]:
-        count = data["pending"].get(game_name, 0) + 1
-        if count >= 2:
+        data["pending"][game_name] = data["pending"].get(game_name, 0) + 1
+        if data["pending"][game_name] >= 2:
             data["official"].append(game_name)
-            if game_name in data["pending"]: del data["pending"][game_name]
-        else:
-            data["pending"][game_name] = count
+            data["pending"].pop(game_name, None)
         save_data(data)
 
-    # Modalにゲーム名と画像リストを渡す
     await interaction.response.send_modal(SellModal(game_name, images))
-
 @bot.tree.command(name="finish", description="取引終了")
 async def finish(interaction: discord.Interaction):
     await interaction.response.send_message("結果を選択：", view=FinishView(interaction.user.id))
