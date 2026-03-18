@@ -324,7 +324,6 @@ class FinishView(discord.ui.View):
             view.add_item(b2)
             await interaction.followup.send("評価をお願いします！", view=view)
 
-# --- 5. Bot本体 ---
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
@@ -333,15 +332,16 @@ class MyBot(commands.Bot):
     async def setup_hook(self):
         self.add_view(TicketLaunchView())
         self.add_view(FinishView(None))
-        self.add_view(StaffRecruitView()) # ←これを必ず追加！
+        self.add_view(StaffRecruitView())
+        
+        # GUILD_ID を使用（もしエラーが出るならここを数字に書き換え）
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
+        
+        # ループを開始
         self.update_panel.start()
-        print("✅ コマンド同期完了")
-
-    # サーバーIDをここで設定（あなたのサーバーのIDに書き換えてください）
-MY_GUILD_ID = 123456789012345678  # ←ここを自分のサーバーIDにする
+        print("✅ コマンド同期 & ループ開始完了")
 
     @tasks.loop(minutes=5)
     async def update_panel(self):
