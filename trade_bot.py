@@ -445,8 +445,19 @@ bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user} 起動完了")
+    # 1. 掃除を実行する（ここを一時的に追加）
+    print("🧹 コマンドの大掃除を開始します...")
+    bot.tree.clear(guild=None) # グローバルを消去
+    # もし特定のサーバーIDがわかるなら↓も追加（123...は自分のサーバーIDに変えてね）
+    # bot.tree.clear(guild=discord.Object(id=1234567890)) 
+    
+    await bot.tree.sync() # 同期して削除を反映
+    print("✅ 掃除完了！一度Botを止めて、この掃除コードを消してください。")
 
+    # --- ここから下は元のコードのままでOK ---
+    game = discord.Game("ゲーム名")
+    await bot.change_presence(activity=game)
+    
     # チケットパネルの設置確認
     channel = bot.get_channel(TICKET_PANEL_CH_ID)
     if channel:
