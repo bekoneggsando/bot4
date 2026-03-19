@@ -593,12 +593,17 @@ async def on_message(message):
 
 
 # --- 補完機能 ---
-async def game_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    data = load_data()
+async def game_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    # 入力された文字(current)が含まれるゲーム名だけを抽出（最大25個まで）
     choices = [
         app_commands.Choice(name=game, value=game)
-        for game in sorted(data["official"]) if current.lower() in game.lower()
+        for game in GAMES_LIST
+        if current.lower() in game.lower()
     ]
+    # 入力がない場合は最初の25個を表示、入力がある場合は一致するものを最大25個表示
     return choices[:25]
 
 # --- スラッシュコマンド ---
