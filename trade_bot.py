@@ -218,44 +218,47 @@ class SellModal(discord.ui.Modal):
         
         forum_channel = interaction.guild.get_channel(FORUM_CHANNEL_ID)
         if not isinstance(forum_channel, discord.ForumChannel):
-            return await interaction.followup.send("❌ 指定されたチャンネルがフォーラムではありません。", ephemeral=True)
+            return await interaction.followup.send("❌ フォーラムチャンネルの設定ミスです。", ephemeral=True)
 
-        # 1. メインのEmbed作成（投稿の最初のメッセージ用）
+        # --- 【新機能】タグの自動判定 ---
+        applied_tags = []
+        # フォーラムに設定されている既存のタグをループで確認
+        for tag in forum_channel.available_tags:
+            # ゲーム名と完全に一致するタグがあれば追加
+            if tag.name == self.game_name:
+                applied_tags.append(tag)
+                break
+        # -------------------------------
+
+        # メインEmbedの作成
         embed = discord.Embed(title=f"📢 出品情報", color=discord.Color.gold())
         embed.add_field(name="🎮 ゲーム", value=self.game_name, inline=True)
         embed.add_field(name="💰 価格", value=f"{self.price.value}円", inline=True)
         embed.add_field(name="💳 支払い", value=self.pay_method.value, inline=True)
-        embed.add_field(name="👤 出品者", value=interaction.user.mention, inline=False)
         
-        if self.description.value:
-            embed.add_field(name="📝 詳細", value=self.description.value, inline=False)
-
-        # 画像がある場合、1枚目をメインにセット
-        files = []
         if self.images:
             embed.set_image(url=self.images[0])
 
-        # 2. フォーラムに新規投稿（スレッド作成）
-        # タイトルを「【ゲーム名】商品名」にすると見やすいです
         thread_title = f"【{self.game_name}】{self.item_name.value}"
         
-        # 投稿作成（content または embed を指定可能）
+        # フォーラム投稿作成 (applied_tags を指定)
         result = await forum_channel.create_thread(
             name=thread_title,
             embed=embed,
+            applied_tags=applied_tags, # ここでタグを付与！
             view=InternalBuyView(self.item_name.value, self.price.value, self.pay_method.value, interaction.user)
         )
         
         post_thread = result.thread
 
-        # 3. 2枚目以降の画像をスレッド内に連投
+        # 2枚目以降の画像を送信
         if len(self.images) > 1:
             for i, img_url in enumerate(self.images[1:], 2):
                 sub_embed = discord.Embed(title=f"📸 詳細画像 {i}", color=discord.Color.blue())
                 sub_embed.set_image(url=img_url)
                 await post_thread.send(embed=sub_embed)
 
-        await interaction.followup.send(f"✅ フォーラムに出品しました！\n{post_thread.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ タグ「{self.game_name}」を付けて出品しました！", ephemeral=True)
 
 
 # --- レビュー・評価システム ---
