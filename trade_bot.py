@@ -775,5 +775,73 @@ async def find(interaction: discord.Interaction, game_name: str):
     
     await interaction.followup.send(embed=embed_result)
 
+# --- 2. ボタンを表示するViewクラス ---
+class TicketMenuView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None) # timeout=Noneでボタンを永続化
+
+    @discord.ui.button(label="通報・違反報告 🚨", style=discord.ButtonStyle.danger, custom_id="report_ticket")
+    async def report_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ReportModal())
+
+    @discord.ui.button(label="不具合・バグ報告 🛠️", style=discord.ButtonStyle.secondary, custom_id="bug_ticket")
+    async def bug_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(BugModal())
+
+# --- 3. 通報用入力フォーム ---
+class ReportModal(discord.ui.Modal, title="ユーザー通報・違反報告"):
+    target_user = discord.ui.TextInput(label="通報対象のユーザー名・ID", placeholder="例: abc_user#0000", required=True)
+    reason = discord.ui.TextInput(label="通報理由", style=discord.TextStyle.paragraph, placeholder="違反内容を具体的に記入してください。", required=True)
+    evidence = discord.ui.TextInput(label="証拠", placeholder="証拠となるメッセージや画像URLがあれば入力してください。", required=False)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        content = f"**【🚨 通報受理】**\n**通報者:** {interaction.user.mention}\n**対象者:** {self.target_user.value}\n**理由:** {self.reason.value}\n**証拠:** {self.evidence.value}"
+        await create_custom_ticket(interaction, "🚨通報", REPORT_CATEGORY_ID, content, discord.Color.red())
+
+# --- 4. 不具合用入力フォーム ---
+class BugModal(discord.ui.Modal, title="不具合・バグ報告"):
+    location = discord.ui.TextInput(label="発生場所", placeholder="例: /sellコマンド、購入ボタン", required=True)
+    description = discord.ui.TextInput(label="内容", style=discord.TextStyle.paragraph, placeholder="何が起きたか詳しく教えてください。", required=True)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        content = f"**【🛠️ 不具合報告】**\n**報告者:** {interaction.user.mention}\n**場所:** {self.location.value}\n**内容:** {self.description.value}"
+        await create_custom_ticket(interaction, "🛠️不具合", BUG_CATEGORY_ID, content, discord.Color.orange())
+
+# --- 5. チケット作成の共通処理 ---
+async def create_custom_ticket(interaction: discord.Interaction, prefix, category_id, content, color):
+    await interaction.response.defer(ephemeral=True)
+    guild = interaction.guild
+    category = guild.get_channel(category_id)
+    
+    if not category:
+        return await interaction.followup.send("❌ 管理用カテゴリが見つかりません。IDを確認してください。", ephemeral=True)
+
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+    
+    ticket_channel = await guild.create_text_channel(
+        name=f"{prefix}-{interaction.user.name}",
+        category=category,
+        overwrites=overwrites
+    )
+    
+    embed = discord.Embed(title=f"{prefix}チケット作成完了", color=color, description=content)
+    await ticket_channel.send(content=f"{interaction.user.mention} 運営が内容を確認いたします。", embed=embed)
+    await interaction.followup.send(f"✅ {prefix}チケットを作成しました: {ticket_channel.mention}", ephemeral=True)
+
+# --- 6. 設置用コマンド ---
+@bot.command()
+async def setup_support(ctx):
+    embed = discord.Embed(
+        title="🚨 サポート・通報窓口",
+        description="トラブルや不具合はこちらのボタンから報告してください。\n※チケットは運営とあなたにしか見えません。",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed, view=TicketMenuView())
+
+
 # 起動
 bot.run(TOKEN)
