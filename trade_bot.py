@@ -537,7 +537,8 @@ bot = MyBot()
 
 @bot.event
 async def on_ready():
-    bot.add_view(TicketMenuView())
+    bot.add_view(ReportView())
+    bot.add_view(BugView())
     # 1. 起動メッセージとステータス設定
     print(f"✅ {bot.user} 起動完了")
     await bot.change_presence(activity=discord.Game("仲介システム稼働中"))
