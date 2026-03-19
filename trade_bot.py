@@ -839,7 +839,7 @@ async def create_custom_ticket(interaction: discord.Interaction, prefix, categor
     await interaction.followup.send(f"✅ {prefix}チケットを作成しました: {ticket_channel.mention}", ephemeral=True)
 
 # --- 6. スラッシュコマンドでの個別設置 ---
-@tree.command(name="setup_support", description="通報と不具合の受付パネルを個別に設置します")
+@bot.tree.command(name="setup_support", description="通報と不具合の受付パネルを個別に設置します")
 async def setup_support(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message("管理者のみ実行可能です。", ephemeral=True)
