@@ -168,59 +168,75 @@ class InternalBuyView(discord.ui.View):
         buyer = interaction.user
         guild = interaction.guild
 
-        # 自分の出品は買えないようにする
+        # 1. 自分の出品は買えないようにする
         if buyer.id == self.seller.id:
             return await interaction.response.send_message("自分の出品は購入できません！", ephemeral=True)
 
-        # --- 【ここから修正：検索から消すための処理】 ---
-        button.disabled = True
-        button.label = f"売約済み (購入者: {buyer.name})"
-        button.style = discord.ButtonStyle.secondary
+        # 2. 【重要】まず最初に応答を「保留」にする（タイムアウト対策）
+        await interaction.response.defer(ephemeral=True)
 
-        # メッセージ内のEmbedを取得して色をグレーに変える
-        if interaction.message.embeds:
-            embed = interaction.message.embeds[0]
-            embed.color = discord.Color.light_gray() # 検索対象外にするために色を変更
-            embed.title = f"【売約済み】{embed.title}" # タイトルも変えると親切
-            # ViewとEmbedを同時に更新！
-            await interaction.message.edit(embed=embed, view=self)
-        else:
-            # 万が一Embedがない場合はViewだけ更新
-            await interaction.message.edit(view=self)
-        # --- 【ここまで】 ---
+        try:
+            # 3. ボタンとEmbedの見た目を更新（売約済み状態へ）
+            button.disabled = True
+            button.label = f"売約済み (購入者: {buyer.name})"
+            button.style = discord.ButtonStyle.secondary
 
-        await interaction.response.send_message(f"取引チケットを作成しました！ {buyer.mention}", ephemeral=True)
+            if interaction.message.embeds:
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.light_gray()
+                embed.title = f"【売約済み】{embed.title}"
+                await interaction.message.edit(embed=embed, view=self)
+            else:
+                await interaction.message.edit(view=self)
 
-        # --- チャンネル作成処理（ここは元のままでOK） ---
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            buyer: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            self.seller: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        }
-        
-        staff_role = guild.get_role(STAFF_ROLE_ID)
-        if staff_role:
-            overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            # 4. 【フォーラム専用】タグを「売約済み」に変更する
+            if isinstance(interaction.channel, discord.Thread):
+                thread = interaction.channel
+                forum = thread.parent
+                # Discord側で作った「売約済み」という名前のタグを探す
+                sold_tag = discord.utils.get(forum.available_tags, name="売約済み")
+                if sold_tag:
+                    # 既存のタグを消して「売約済み」だけにする（または追加する場合はリストに加える）
+                    await thread.edit(applied_tags=[sold_tag])
 
-        category = guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
-        ticket_channel = await guild.create_text_channel(
-            name=f"🤝-{buyer.name}",
-            category=category,
-            overwrites=overwrites,
-            topic=f"出品者: {self.seller.name} / 購入者: {buyer.name}"
-        )
+            # 5. 取引チケット（チャンネル）作成処理
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                buyer: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+                self.seller: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            
+            staff_role = guild.get_role(STAFF_ROLE_ID)
+            if staff_role:
+                overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
-        info_embed = discord.Embed(title="🤝 取引チケット作成完了", color=discord.Color.blue(), description="スタッフが来るまでお待ちください。")
-        info_embed.add_field(name="商品名", value=self.item)
-        info_embed.add_field(name="価格", value=self.price)
-        info_embed.add_field(name="出品者", value=self.seller.mention)
-        info_embed.add_field(name="購入者", value=buyer.mention)
-        
-        await ticket_channel.send(
-            content=f"{self.seller.mention} {buyer.mention} {staff_role.mention if staff_role else ''}",
-            embed=info_embed, 
-        )
+            category = guild.get_channel(TICKET_CATEGORY_ID)
+            ticket_channel = await guild.create_text_channel(
+                name=f"🤝-{buyer.name}",
+                category=category,
+                overwrites=overwrites,
+                topic=f"出品者: {self.seller.name} / 購入者: {buyer.name}"
+            )
+
+            # 6. チケット内での案内
+            info_embed = discord.Embed(title="🤝 取引チケット作成完了", color=discord.Color.blue(), description="スタッフが来るまでお待ちください。")
+            info_embed.add_field(name="商品名", value=self.item)
+            info_embed.add_field(name="価格", value=self.price)
+            info_embed.add_field(name="出品者", value=self.seller.mention)
+            info_embed.add_field(name="購入者", value=buyer.mention)
+            
+            await ticket_channel.send(
+                content=f"{self.seller.mention} {buyer.mention} {staff_role.mention if staff_role else ''}",
+                embed=info_embed, 
+            )
+
+            # 7. 完了報告
+            await interaction.followup.send(f"✅ 取引チケットを作成しました！ {ticket_channel.mention}", ephemeral=True)
+
+        except Exception as e:
+            print(f"エラーが発生しました: {e}")
+            await interaction.followup.send("❌ 処理中にエラーが発生しました。設定（タグ名やカテゴリID）を確認してください。", ephemeral=True)
 
 class SellModal(discord.ui.Modal):
     def __init__(self, game_name, images=None):
